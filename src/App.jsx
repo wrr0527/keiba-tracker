@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
+import { uploadRecords, downloadRecords, getToken, saveToken, clearToken, getRemoteMeta } from "./googleSync";
 
 // ── 定数 ─────────────────────────────────────────────
 const BET_TYPES = ["単勝", "複勝", "枠連", "馬連", "ワイド", "馬単", "三連複", "三連単"];
@@ -319,25 +321,24 @@ function OddsStepper({ value, onChange, oddsMode }) {
   const inputStyleOdds = { flex: 1, minWidth: 60, background: "#1e2a40", border: "1px solid #2a3550", borderRadius: 4, color: "#e4e6eb", fontSize: 14, fontWeight: 700, padding: "4px 8px", fontFamily: "monospace", textAlign: "right" };
 
   if (oddsMode === "per100") {
-    // 100円払戻モード：100円単位ステッパー
+    // 100円払戻モード：10円単位ステッパー（複勝1.5倍=150円などに対応）
     const yenVal = value > 0 ? Math.round(value * 100) : 0;
     const setYen = (n) => {
-      const snapped = Math.max(0, Math.round(n / 100) * 100);
+      const snapped = Math.max(0, Math.round(n / 10) * 10);
       onChange(snapped > 0 ? snapped / 100 : 0);
     };
     return (
       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-        <button onClick={() => setYen(yenVal - 100)} style={stepBtn}>−</button>
-        <input type="number" min="0" step="100" value={yenVal || ""}
+        <button onClick={() => setYen(yenVal - 10)} style={stepBtn}>−</button>
+        <input type="number" min="0" step="10" value={yenVal || ""}
           onChange={e => {
-            // 直接編集中は中間値も許容、ただし保存値は内部で 100単位スナップ
             const n = Number(e.target.value);
-            onChange(n > 0 ? Math.round(n / 100) * 100 / 100 : 0);
+            onChange(n > 0 ? Math.round(n / 10) * 10 / 100 : 0);
           }}
           placeholder="2340"
           style={inputStyleOdds} />
         <span style={{ fontSize: 11, color: "#6b7a99", flexShrink: 0 }}>円</span>
-        <button onClick={() => setYen(yenVal + 100)} style={stepBtn}>＋</button>
+        <button onClick={() => setYen(yenVal + 10)} style={stepBtn}>＋</button>
       </div>
     );
   }
@@ -793,6 +794,112 @@ function TagStatsList({ records, emptyMsg }) {
   ));
 }
 
+// ── Google Sheets 同期セクション ─────────────
+function GoogleSyncSection({ records, onImport, showToast }) {
+  const [synced, setSynced] = useState(!!getToken());
+  const [busy, setBusy] = useState(false);
+  const [remoteMeta, setRemoteMeta] = useState(null);
+
+  const refreshMeta = async () => {
+    if (!getToken()) return;
+    const meta = await getRemoteMeta();
+    setRemoteMeta(meta);
+  };
+
+  useEffect(() => {
+    refreshMeta();
+  }, []);
+
+  const login = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      const expiresAt = Date.now() + (tokenResponse.expires_in - 60) * 1000;
+      saveToken(tokenResponse.access_token, expiresAt);
+      setSynced(true);
+      showToast("Googleにログインしました");
+      refreshMeta();
+    },
+    onError: () => showToast("ログインに失敗しました", "#e05555"),
+    scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
+  });
+
+  const handleLogout = () => {
+    clearToken();
+    setSynced(false);
+    setRemoteMeta(null);
+    showToast("ログアウトしました", "#888");
+  };
+
+  const handleUpload = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await uploadRecords(records);
+      showToast(`${r.count}件をアップロードしました`);
+      refreshMeta();
+    } catch (e) {
+      showToast(e.message || "アップロード失敗", "#e05555");
+      if (String(e.message).includes("認証")) { clearToken(); setSynced(false); }
+    }
+    setBusy(false);
+  };
+
+  const handleDownload = async () => {
+    if (busy) return;
+    if (records.length > 0 && !confirm("ローカルのデータが置き換わります。続行しますか？")) return;
+    setBusy(true);
+    try {
+      const remote = await downloadRecords();
+      if (remote.length === 0) {
+        showToast("クラウドに記録がありません", "#888");
+      } else {
+        onImport(remote, true);
+        showToast(`${remote.length}件をダウンロードしました`);
+      }
+    } catch (e) {
+      showToast(e.message || "ダウンロード失敗", "#e05555");
+      if (String(e.message).includes("認証")) { clearToken(); setSynced(false); }
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ marginBottom: 20, padding: "14px", background: "#0f1c2a", borderRadius: 10, border: "1px solid #2a4a5a" }}>
+      <div style={{ fontSize: 13, color: "#88c8e8", fontWeight: 800, marginBottom: 4 }}>☁️ Google Sheets 同期</div>
+      <div style={{ fontSize: 11, color: "#6b7a99", marginBottom: 12, lineHeight: 1.5 }}>
+        PCとスマホでデータを共有できます。<br />
+        Googleドライブに「馬券収支ノート_データ」シートを作成して保存します。
+      </div>
+
+      {!synced ? (
+        <button onClick={() => login()} disabled={busy}
+          style={{ width: "100%", padding: 12, borderRadius: 8, border: "1.5px solid #4287f5", background: "#1a2a55", color: "#88c8e8", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          🔐 Googleでログイン
+        </button>
+      ) : (
+        <>
+          <div style={{ fontSize: 11, color: "#6cbc5e", marginBottom: 10, fontWeight: 600 }}>✓ ログイン済み</div>
+          {remoteMeta && (
+            <div style={{ fontSize: 10, color: "#6b7a99", marginBottom: 10, padding: "6px 10px", background: "#0d1117", borderRadius: 6, fontFamily: "monospace" }}>
+              クラウド：{remoteMeta.count}件 / {new Date(remoteMeta.savedAt).toLocaleString("ja-JP")}
+            </div>
+          )}
+          <button onClick={handleUpload} disabled={busy || records.length === 0}
+            style={{ width: "100%", padding: 11, borderRadius: 8, border: "1.5px solid #6cbc5e", background: "#1a3a1a", color: "#6cbc5e", fontSize: 13, fontWeight: 700, marginBottom: 8, cursor: busy || records.length === 0 ? "not-allowed" : "pointer", opacity: busy || records.length === 0 ? 0.5 : 1 }}>
+            {busy ? "処理中..." : `↑ アップロード（ローカル ${records.length}件 → クラウド）`}
+          </button>
+          <button onClick={handleDownload} disabled={busy}
+            style={{ width: "100%", padding: 11, borderRadius: 8, border: "1.5px solid #e8c86a", background: "#3a3015", color: "#e8c86a", fontSize: 13, fontWeight: 700, marginBottom: 8, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.5 : 1 }}>
+            {busy ? "処理中..." : "↓ ダウンロード（クラウド → ローカル）"}
+          </button>
+          <button onClick={handleLogout} disabled={busy}
+            style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid #2a3550", background: "transparent", color: "#6b7a99", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+            ログアウト
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 function DataManagerModal({ records, onClose, onImport }) {
   const [mode, setMode] = useState(null);
   const fileInputRef = useRef();
@@ -824,6 +931,7 @@ function DataManagerModal({ records, onClose, onImport }) {
               <div style={{ fontSize: 16, fontWeight: 800, color: "#e8c86a" }}>データ管理</div>
               <button onClick={onClose} style={{ background: "none", border: "none", color: "#6b7a99", fontSize: 20, cursor: "pointer" }}>✕</button>
             </div>
+	　　<GoogleSyncSection records={records} onImport={onImport} showToast={alert} />	
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 11, color: "#6b7a99", fontWeight: 700, marginBottom: 10, letterSpacing: 0.5 }}>エクスポート</div>
               <button onClick={exportCSV} disabled={records.length === 0} style={{ width: "100%", padding: "12px", borderRadius: 8, border: "1.5px solid #3a4f7a", background: "#1e2a40", color: "#b8d0ff", fontSize: 13, fontWeight: 700, marginBottom: 8, cursor: records.length > 0 ? "pointer" : "not-allowed", opacity: records.length > 0 ? 1 : 0.5, textAlign: "left" }}>📊 CSV としてダウンロード</button>
