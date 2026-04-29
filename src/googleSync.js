@@ -22,6 +22,13 @@ export const clearToken = () => {
   localStorage.removeItem("gsync-spreadsheet-id");
 };
 
+// トークンが存在するが期限切れ（再ログインが必要）かどうか
+export const isTokenExpired = () => {
+  const token = localStorage.getItem("gsync-token");
+  const expires = Number(localStorage.getItem("gsync-expires") || 0);
+  return !!token && Date.now() > expires;
+};
+
 const getSpreadsheetId = () => localStorage.getItem("gsync-spreadsheet-id");
 const setSpreadsheetId = (id) => localStorage.setItem("gsync-spreadsheet-id", id);
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
-import { uploadRecords, downloadRecords, getToken, saveToken, clearToken, getRemoteMeta } from "./googleSync";
+import { uploadRecords, downloadRecords, getToken, saveToken, clearToken, getRemoteMeta, isTokenExpired } from "./googleSync";
 
 // ── 定数 ─────────────────────────────────────────────
 const BET_TYPES = ["単勝", "複勝", "枠連", "馬連", "ワイド", "馬単", "三連複", "三連単"];
@@ -33,7 +33,7 @@ const GRADE_COLORS = { G1: "#e8c86a", G2: "#aab8d4", G3: "#c8a0d0", Jpn1: "#d4a8
 const GRADE_OPTIONS = { JRA: ["一般", "G3", "G2", "G1"], 地方: ["一般", "地方重賞", "Jpn3", "Jpn2", "Jpn1"] };
 
 const JOCKEYS = [
-  "C.ルメール","川田将雅","武豊","戸崎圭太","横山武史","坂井瑠星","岩田望来","松山弘平","北村友一","北村宏司",
+  "C.ルメール","川田将雅","武豊","戸崎圭太","横山武史","坂井瑠星","岩田望来","岩田康誠","松山弘平","北村友一","北村宏司",
   "福永祐一","横山和生","横山典弘","M.デムーロ","田辺裕信","三浦皇成","石橋脩","津村明秀","吉田隼人","鮫島克駿",
   "菅原明良","菊沢一樹","浜中俊","池添謙一","和田竜二","酒井学","藤岡佑介","藤岡康太","幸英明","荻野極",
   "西村淳也","今村聖奈","永野猛蔵","小沢大仁","田口貫太","河原田菜々","佐々木大輔","角田大和","角田大河","国分恭介",
@@ -248,7 +248,20 @@ function CalendarPicker({ value, onChange, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: "#161c2e", borderRadius: 16, padding: 18, width: "100%", maxWidth: 360, border: "1px solid #2a3550" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <button onClick={prev} style={navBtn}>‹</button>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#e8c86a" }}>{viewYear}年 {viewMonth + 1}月</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <select value={viewYear} onChange={e => setViewYear(Number(e.target.value))}
+              style={{ background: "#1e2a40", border: "1px solid #2a3550", borderRadius: 6, color: "#e8c86a", fontSize: 15, fontWeight: 800, padding: "4px 6px", cursor: "pointer" }}>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                <option key={y} value={y}>{y}年</option>
+              ))}
+            </select>
+            <select value={viewMonth} onChange={e => setViewMonth(Number(e.target.value))}
+              style={{ background: "#1e2a40", border: "1px solid #2a3550", borderRadius: 6, color: "#e8c86a", fontSize: 15, fontWeight: 800, padding: "4px 6px", cursor: "pointer" }}>
+              {Array.from({ length: 12 }, (_, i) => i).map(m => (
+                <option key={m} value={m}>{m + 1}月</option>
+              ))}
+            </select>
+          </div>
           <button onClick={next} style={navBtn}>›</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
@@ -282,7 +295,7 @@ function CalendarPicker({ value, onChange, onClose }) {
 // ── 金額ステッパー ─────────────
 function AmountStepper({ value, onChange, compact = false }) {
   const val = Number(value) || 0;
-  const setTo = n => onChange(Math.max(100, Math.floor(n / 100) * 100));
+  const setTo = n => onChange(Math.max(0, Math.floor(n / 100) * 100));
   const inc = step => setTo(val + step);
   const dec = step => setTo(val - step);
   if (compact) {
@@ -296,18 +309,25 @@ function AmountStepper({ value, onChange, compact = false }) {
       </div>
     );
   }
+  const incBtn = { flex: 1, padding: "7px 0", borderRadius: 6, border: "1px solid #3a4f7a", background: "#1e2a40", color: "#b8d0ff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "monospace" };
+  const decBtn = { flex: 1, padding: "7px 0", borderRadius: 6, border: "1px solid #5a3a6a", background: "#2a1a3a", color: "#d0a0ff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "monospace" };
   const bigBtn = { width: 56, padding: "12px 0", borderRadius: 8, border: "1.5px solid #3a4f7a", background: "#2a3a55", color: "#b8d0ff", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0 };
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
         <button onClick={() => dec(100)} style={bigBtn}>−100</button>
-        <input type="number" min="100" step="100" value={val} onChange={e => setTo(Number(e.target.value))}
+        <input type="number" min="0" step="100" value={val} onChange={e => setTo(Number(e.target.value))}
           style={{ flex: 1, padding: "12px 14px", background: "#1e2a40", border: "1.5px solid #2a3550", borderRadius: 8, color: "#e4e6eb", fontSize: 18, fontWeight: 700, textAlign: "center", fontFamily: "monospace" }} />
         <button onClick={() => inc(100)} style={bigBtn}>＋100</button>
       </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+        {[100, 500, 1000, 5000, 10000].map(step => (
+          <button key={step} onClick={() => inc(step)} style={incBtn}>+{step >= 1000 ? `${step / 1000}k` : step}</button>
+        ))}
+      </div>
       <div style={{ display: "flex", gap: 6 }}>
         {[100, 500, 1000, 5000, 10000].map(step => (
-          <button key={step} onClick={() => inc(step)} style={{ flex: 1, padding: "7px 0", borderRadius: 6, border: "1px solid #3a4f7a", background: "#1e2a40", color: "#b8d0ff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "monospace" }}>+{step >= 1000 ? `${step / 1000}k` : step}</button>
+          <button key={step} onClick={() => dec(step)} style={decBtn}>−{step >= 1000 ? `${step / 1000}k` : step}</button>
         ))}
       </div>
     </div>
@@ -1045,11 +1065,21 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [dataManagerOpen, setDataManagerOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     let local = [];
     try { const v = localStorage.getItem("keiba-records-v3"); if (v) local = JSON.parse(v); } catch {}
     setRecords(local);
+
+    // トークン期限切れなら再ログイン促しトーストを表示（3秒後）
+    if (isTokenExpired()) {
+      setTimeout(() => {
+        setToast({ msg: "☁ Google セッション期限切れ — ⚙ から再ログインできます", color: "#e8a838" });
+        setTimeout(() => setToast(null), 4000);
+      }, 1500);
+      return;
+    }
 
     if (!getToken()) return;
     downloadRecords()
@@ -1078,6 +1108,38 @@ export default function App() {
     try { await uploadRecords(next); }
     catch { /* ネットワークエラーは無視、手動同期で対応可 */ }
   }, []);
+
+  const restoreFormFromRecord = useCallback((r, clearHits = false) => {
+    const entries = r.formEntries
+      ? r.formEntries.map(e => ({
+          ...e,
+          id: Math.random().toString(36).slice(2, 9),
+          ...(clearHits ? { hitCombos: [], oddsMap: {} } : {}),
+        }))
+      : [newEntry("manual")];
+    return {
+      ...initialForm,
+      date: r.date, venueType: r.venueType || "JRA", venue: r.venue || "",
+      raceNo: r.raceNo || "", grade: r.grade || "一般", raceName: r.raceName || "",
+      betType: r.betType || "三連単",
+      oddsMode: form.oddsMode,
+      entries,
+    };
+  }, [form.oddsMode]);
+
+  const handleCopy = useCallback((r) => {
+    setForm(restoreFormFromRecord(r, true));
+    setEditingId(null);
+    setTab("input");
+    showToast("コピーしました。内容を確認して記録してください", "#e8c86a");
+  }, [restoreFormFromRecord]);
+
+  const handleEdit = useCallback((r) => {
+    setForm(restoreFormFromRecord(r, false));
+    setEditingId(r.id);
+    setTab("input");
+    showToast("編集モード：保存すると上書きされます", "#5b7fbf");
+  }, [restoreFormFromRecord]);
 
   const showToast = (msg, color = "#6cbc5e") => { setToast({ msg, color }); setTimeout(() => setToast(null), 2400); };
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -1149,11 +1211,12 @@ export default function App() {
     const repOdds = allHitOdds.length > 0 ? Math.max(...allHitOdds) : 0;
 
     const record = {
-      id: Date.now(),
+      id: editingId || Date.now(),
       date: form.date, venueType: form.venueType, venue: form.venue, raceNo: form.raceNo,
       grade: form.grade, raceName: form.raceName,
       betType: form.betType, combination: combinationText,
       tags: allTags,
+      formEntries: form.entries, // 編集・コピー用にフォームデータを保存
       entries: form.entries.map(e => {
         const r = computeEntry(e, form.betType);
         const validHits = (e.hitCombos || []).filter(c => r.combinations.includes(c));
@@ -1164,16 +1227,23 @@ export default function App() {
       investment: totalInvestment, payout: totalPayout, pnl: totalPnl,
     };
 
-    const nextRecords = [record, ...records];
+    const base = editingId ? records.filter(r => r.id !== editingId) : records;
+    const nextRecords = [record, ...base];
     await saveRecords(nextRecords);
     syncToCloud(nextRecords);
+    setEditingId(null);
+
     if (keepRace) {
       setForm(keepRaceInfo(form));
       showToast(anyHit ? `的中！ ${totalPnl >= 0 ? "+" : ""}${formatYen(totalPnl)} (続けて入力)` : `外れ 記録完了 (続けて入力)`);
     } else {
-      setForm(f => ({ ...initialForm, date: f.date, venueType: f.venueType, venue: f.venue, oddsMode: f.oddsMode, betType: f.betType }));
-      showToast(anyHit ? `的中！ ${totalPnl >= 0 ? "+" : ""}${formatYen(totalPnl)}` : `外れ … -${formatYen(totalInvestment)}`, anyHit ? "#6cbc5e" : "#e05555");
-      setTab("history");
+      // 日付・競馬場・券種を維持してフォームをリセット（履歴タブへは遷移しない）
+      setForm(f => ({
+        ...initialForm,
+        date: f.date, venueType: f.venueType, venue: f.venue,
+        oddsMode: f.oddsMode, betType: f.betType,
+      }));
+      showToast(anyHit ? `的中！ ${totalPnl >= 0 ? "+" : ""}${formatYen(totalPnl)}` : `外れ … −${formatYen(totalInvestment)}`, anyHit ? "#6cbc5e" : "#e05555");
     }
   };
 
@@ -1348,9 +1418,20 @@ export default function App() {
             </div>
           )}
 
+          {editingId && (
+            <div style={{ background: "#1a2a4a", border: "1.5px solid #5b7fbf", borderRadius: 10, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 16 }}>✏️</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#88c0ff" }}>編集モード</div>
+                <div style={{ fontSize: 11, color: "#6b7a99" }}>保存すると元の記録が上書きされます</div>
+              </div>
+              <button onClick={() => { setEditingId(null); setForm(f => ({ ...initialForm, date: f.date, venueType: f.venueType, venue: f.venue, oddsMode: f.oddsMode, betType: f.betType })); }}
+                style={{ background: "none", border: "1px solid #3a4f7a", color: "#6b7a99", fontSize: 11, padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>キャンセル</button>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => handleSubmit(false)} style={{ flex: 2, padding: 14, borderRadius: 12, border: "none", fontSize: 15, fontWeight: 800, background: "linear-gradient(135deg,#e8c86a,#d4a830)", color: "#0d1117", cursor: "pointer", letterSpacing: 0.5 }}>
-              記録して履歴へ
+              {editingId ? "上書き保存" : "記録する"}
             </button>
             <button onClick={() => handleSubmit(true)} title="同じレースで続けて入力"
               style={{ flex: 1, padding: 14, borderRadius: 12, border: "1.5px solid #3a4f7a", fontSize: 12, fontWeight: 700, background: "transparent", color: "#b8d0ff", cursor: "pointer", lineHeight: 1.3 }}>
@@ -1395,7 +1476,7 @@ export default function App() {
               <StatMini label="的中率" value={hitRate + "%"} color="#e8c86a" small />
             </div>
           )}
-          {viewMode === "list" && (filtered.length === 0 ? <EmptyState /> : filtered.map(r => <RecordCard key={r.id} record={r} onDelete={() => setDeleteTarget(r.id)} />))}
+          {viewMode === "list" && (filtered.length === 0 ? <EmptyState /> : filtered.map(r => <RecordCard key={r.id} record={r} onDelete={() => setDeleteTarget(r.id)} onEdit={() => handleEdit(r)} onCopy={() => handleCopy(r)} />))}
           {viewMode === "daily" && (dailyGroups.length === 0 ? <EmptyState /> : dailyGroups.map(([d, recs]) => <SummaryCard key={d} title={d.replace(/-/g, "/")} subtitle={`(${dayOfWeek(d)}曜日)`} records={recs} />))}
           {viewMode === "monthly" && (monthlyGroups.length === 0 ? <EmptyState /> : monthlyGroups.map(([ym, recs]) => { const [y, m] = ym.split("-"); return <SummaryCard key={ym} title={`${y}年 ${Number(m)}月`} records={recs} />; }))}
           {viewMode === "yearly" && (yearlyGroups.length === 0 ? <EmptyState /> : yearlyGroups.map(([y, recs]) => <SummaryCard key={y} title={`${y}年`} records={recs} />))}
@@ -1511,17 +1592,23 @@ export default function App() {
   );
 }
 
-function RecordCard({ record: r, onDelete }) {
+function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
   const raceLabel = [r.venue, r.raceNo ? `${r.raceNo}R` : "", r.raceName].filter(Boolean).join("  ");
   const totalHitCount = (r.entries || []).reduce((s, e) => s + (e.hitCount || 0), 0);
+  const actionBtn = { background: "none", border: "1px solid #2a3550", borderRadius: 6, color: "#6b7a99", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: "4px 8px", flexShrink: 0 };
   return (
-    <div style={{ background: "#161c2e", borderRadius: 12, padding: 14, marginBottom: 10, border: `1px solid ${r.isHit ? "#2a3a2a" : "#2a3550"}` }}>
+    <div style={{ background: r.isHit ? "#141f14" : "#161c2e", borderRadius: 12, padding: 14, marginBottom: 10, border: `1.5px solid ${r.isHit ? "#3a5a3a" : "#2a3550"}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 5 }}>
             <BetTypeBadge type={r.betType} />
             {r.grade && r.grade !== "一般" && <GradeBadge grade={r.grade} />}
             {r.venueType === "地方" && <span style={{ fontSize: 10, background: "#2a3550", color: "#8899bb", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>地方</span>}
+            {r.isHit && (
+              <span style={{ background: "#1a4a1a", border: "1.5px solid #6cbc5e", color: "#6cbc5e", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>
+                ✓ 的中 {totalHitCount > 0 ? `${totalHitCount}点` : ""}
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 11, color: "#6b7a99" }}>{r.date}（{dayOfWeek(r.date)}）</div>
           {raceLabel && <div style={{ fontSize: 12, color: "#aab8cc", fontWeight: 600, marginTop: 2 }}>{raceLabel}</div>}
@@ -1531,7 +1618,11 @@ function RecordCard({ record: r, onDelete }) {
             </div>
           )}
         </div>
-        <button onClick={onDelete} style={{ background: "none", border: "none", color: "#445", cursor: "pointer", fontSize: 16, padding: "0 4px", flexShrink: 0 }}>🗑</button>
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+          <button onClick={onEdit} style={actionBtn}>✏️ 編集</button>
+          <button onClick={onCopy} style={actionBtn}>📋 コピー</button>
+          <button onClick={onDelete} style={{ ...actionBtn, color: "#554", border: "none" }}>🗑</button>
+        </div>
       </div>
 
       {r.combination && (
@@ -1551,7 +1642,7 @@ function RecordCard({ record: r, onDelete }) {
           <StatMini label="収支" value={(r.pnl >= 0 ? "+" : "") + formatYen(r.pnl)} color={r.pnl >= 0 ? "#6cbc5e" : "#e05555"} small /></>
         ) : (
           <><StatMini label="結果" value="外れ" color="#e05555" small />
-          <StatMini label="収支" value={"-" + formatYen(r.investment)} color="#e05555" small /></>
+          <StatMini label="収支" value={"−" + formatYen(r.investment)} color="#e05555" small /></>
         )}
       </div>
     </div>
