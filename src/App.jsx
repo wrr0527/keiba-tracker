@@ -71,7 +71,7 @@ const initialForm = {
   date: new Date().toISOString().slice(0, 10),
   venueType: "JRA", venue: "", raceNo: "", grade: "一般", raceName: "",
   betType: "三連単", entries: [newEntry("manual")],
-  oddsMode: "multiplier",
+  oddsMode: "per100",
 };
 
 const keepRaceInfo = (prev) => ({
@@ -454,32 +454,80 @@ function HorseGrid({ max, selected, onToggle, disabled = [], accent = "#e8c86a" 
 
 // ── 4モードエディタ ─────────────
 function ManualEditor({ entry, onChange, betType }) {
-  const [padOpen, setPadOpen] = useState(false);
-  const cfg = BET_TYPE_CONFIG[betType]; const sep = cfg.sep;
-  const append = t => onChange({ ...entry, text: (entry.text || "") + t });
-  const backspace = () => onChange({ ...entry, text: (entry.text || "").slice(0, -1) });
+  const { slots, sep, max } = BET_TYPE_CONFIG[betType];
+  const text = entry.text || "";
+
+  const handleTap = (n) => {
+    let newText;
+    if (slots === 1) {
+      const t = !text ? "" : (text.endsWith("\n") ? text : text + "\n");
+      newText = t + String(n) + "\n";
+    } else {
+      const lines = text.split("\n");
+      const lastLine = lines[lines.length - 1];
+      if (!lastLine) {
+        newText = text + String(n);
+      } else {
+        const count = lastLine.split(sep).length;
+        if (count >= slots) {
+          newText = text + "\n" + String(n);
+        } else if (count + 1 >= slots) {
+          newText = text + sep + String(n) + "\n";
+        } else {
+          newText = text + sep + String(n);
+        }
+      }
+    }
+    onChange({ ...entry, text: newText });
+  };
+
+  const backspace = () => {
+    const t = entry.text || "";
+    if (!t) return;
+    onChange({ ...entry, text: t.slice(0, -1) });
+  };
   const clearAll = () => onChange({ ...entry, text: "" });
-  const placeholder = cfg.slots === 1 ? "例：7" : cfg.slots === 2 ? `例：3${sep}7\n3${sep}12` : `例：3${sep}7${sep}12\n3${sep}7${sep}15`;
+
+  const allLines = text.split("\n");
+  const completedLines = allLines.slice(0, -1).filter(Boolean);
+  const currentLine = allLines[allLines.length - 1] || "";
+  const currentCount = !currentLine ? 0 : (slots === 1 ? 1 : currentLine.split(sep).length);
+
   return (
-    <>
-      <textarea value={entry.text || ""} onChange={e => onChange({ ...entry, text: e.target.value })}
-        placeholder={placeholder} rows={Math.min(Math.max(2, (entry.text || "").split("\n").length), 6)}
-        style={{ ...inputStyle, fontFamily: "monospace", fontSize: 15, letterSpacing: 1, resize: "vertical", marginBottom: 8 }} />
-      <button onClick={() => setPadOpen(!padOpen)} style={{ width: "100%", padding: 7, borderRadius: 7, border: "1px solid #2a3550", background: padOpen ? "#2a3550" : "#1a2035", color: "#8899bb", fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: padOpen ? 10 : 0 }}>
-        {padOpen ? "▲ 数字パッドを閉じる" : "▼ 数字パッドを開く"}
-      </button>
-      {padOpen && (
-        <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: 10 }}>
-          <div style={{ marginBottom: 6 }}><HorseGrid max={cfg.max} selected={[]} onToggle={n => append(String(n))} /></div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {sep && <button onClick={() => append(sep)} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid #3a4f7a", background: "#2a3a55", color: "#b8d0ff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{sep}</button>}
-            <button onClick={() => append("\n")} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid #2a3550", background: "#1e2a40", color: "#aab", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>改行</button>
-            <button onClick={backspace} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid #2a3550", background: "#1e2a40", color: "#aab", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>⌫</button>
-            <button onClick={clearAll} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid #5a2a2a", background: "#3a1a1a", color: "#e05555", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>全消去</button>
+    <div>
+      <div style={{ minHeight: 52, maxHeight: 130, overflowY: "auto", background: "#0f1420", border: "1px solid #2a3550", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontFamily: "monospace", fontSize: 14 }}>
+        {completedLines.length === 0 && !currentLine ? (
+          <div style={{ color: "#445", fontSize: 12 }}>
+            {slots === 1 ? "馬番をタップして追加" : `馬番タップで入力 — ${slots}頭で1組み合わせ`}
           </div>
-        </div>
-      )}
-    </>
+        ) : (
+          <>
+            {completedLines.map((line, i) => (
+              <div key={i} style={{ color: "#6cbc5e", letterSpacing: 1, lineHeight: 1.7 }}>✓ {line}</div>
+            ))}
+            {currentLine && (
+              <div style={{ color: "#e8c86a", letterSpacing: 1, lineHeight: 1.7 }}>
+                ▶ {currentLine}<span style={{ opacity: 0.4 }}>▊</span>
+                {slots > 1 && <span style={{ fontSize: 10, color: "#6b7a99", marginLeft: 6 }}>{currentCount}/{slots}頭</span>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <HorseGrid max={max} selected={[]} onToggle={handleTap} />
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button onClick={backspace}
+          style={{ flex: 2, padding: "10px 0", borderRadius: 6, border: "1px solid #2a3550", background: "#1e2a40", color: "#aab", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
+          ⌫
+        </button>
+        <button onClick={clearAll}
+          style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "1px solid #5a2a2a", background: "#3a1a1a", color: "#e05555", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          全消去
+        </button>
+      </div>
+    </div>
   );
 }
 function BoxEditor({ entry, onChange, betType }) {
@@ -588,8 +636,12 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
         </button>
       </div>
 
-      <div style={{ fontSize: 10, color: "#6b7a99", marginBottom: 8, lineHeight: 1.5 }}>
-        ☐ をタップして的中した組み合わせをチェック → オッズ欄が表示されます
+      <div style={{ background: "#1a2540", border: "1.5px solid #3a4f7a", borderRadius: 8, padding: "10px 12px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 28, lineHeight: 1 }}>☐</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#b8d0ff", lineHeight: 1.4 }}>をタップして的中をチェック</div>
+          <div style={{ fontSize: 11, color: "#6b7a99", marginTop: 2 }}>チェックするとオッズ入力欄が表示されます</div>
+        </div>
       </div>
 
       <div style={{ maxHeight: 360, overflowY: "auto" }}>
@@ -604,12 +656,12 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
                 {/* チェックボックス */}
                 <button onClick={() => toggleHit(combo)}
                   style={{
-                    width: 22, height: 22, borderRadius: 6, padding: 0, lineHeight: 1,
-                    border: `2px solid ${isHit ? "#6cbc5e" : "#4a5a7a"}`,
-                    background: isHit ? "#6cbc5e" : "transparent",
-                    color: "#0d1117", fontSize: 14, fontWeight: 900,
-                    cursor: "pointer", flexShrink: 0,
-                  }}>{isHit ? "✓" : ""}</button>
+                    width: 36, height: 36, borderRadius: 8, padding: 0, lineHeight: 1,
+                    border: `2.5px solid ${isHit ? "#6cbc5e" : "#5a7aaa"}`,
+                    background: isHit ? "#6cbc5e" : "#1a2a45",
+                    color: isHit ? "#0d1117" : "#5a7aaa", fontSize: 20, fontWeight: 900,
+                    cursor: "pointer", flexShrink: 0, boxShadow: isHit ? "0 0 8px #6cbc5e66" : "none",
+                  }}>{isHit ? "✓" : "□"}</button>
 
                 {/* 組み合わせ表示 */}
                 <div style={{ flex: 1, fontFamily: "monospace", fontSize: 14, fontWeight: 700, letterSpacing: 1,
@@ -1117,7 +1169,7 @@ export default function App() {
   const showYearFilter = viewMode !== "yearly";
 
   return (
-    <div style={{ fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", background: "#0d1117", minHeight: "100vh", color: "#e4e6eb", maxWidth: 480, margin: "0 auto", paddingBottom: 80 }}>
+    <div style={{ fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", background: "#0d1117", minHeight: "100vh", color: "#e4e6eb", maxWidth: 480, width: "100%", margin: "0 auto", paddingBottom: 80, boxSizing: "border-box" }}>
       <div style={{ background: "linear-gradient(135deg,#1a2535 0%,#0d1117 100%)", borderBottom: "1px solid #2a3550", padding: "16px 20px 12px", position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 22 }}>🏇</span>
@@ -1274,7 +1326,7 @@ export default function App() {
       )}
 
       {tab === "history" && (
-        <div style={{ padding: "16px 16px 0" }}>
+        <div style={{ padding: "16px 16px 0", width: "100%", boxSizing: "border-box" }}>
           <div style={{ display: "flex", background: "#161c2e", borderRadius: 10, padding: 3, marginBottom: 12, border: "1px solid #2a3550" }}>
             {[{ id: "list", label: "一覧" }, { id: "daily", label: "日別" }, { id: "monthly", label: "月別" }, { id: "yearly", label: "年別" }].map(m => (
               <button key={m.id} onClick={() => setViewMode(m.id)}
@@ -1327,7 +1379,7 @@ export default function App() {
       )}
 
       {tab === "stats" && (
-        <div style={{ padding: "16px 16px 0" }}>
+        <div style={{ padding: "16px 16px 0", width: "100%", boxSizing: "border-box" }}>
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>通算成績</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
