@@ -1047,12 +1047,36 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
-    try { const v = localStorage.getItem("keiba-records-v3"); if (v) setRecords(JSON.parse(v)); } catch {}
+    let local = [];
+    try { const v = localStorage.getItem("keiba-records-v3"); if (v) local = JSON.parse(v); } catch {}
+    setRecords(local);
+
+    if (!getToken()) return;
+    downloadRecords()
+      .then(remote => {
+        if (!remote.length) return;
+        const map = new Map(local.map(r => [r.id, r]));
+        let added = 0;
+        remote.forEach(r => { if (!map.has(r.id)) { map.set(r.id, r); added++; } });
+        if (!added) return;
+        const merged = [...map.values()].sort((a, b) => b.id - a.id);
+        setRecords(merged);
+        try { localStorage.setItem("keiba-records-v3", JSON.stringify(merged)); } catch {}
+        setToast({ msg: `☁ ${added}件をクラウドから同期しました`, color: "#6cbc5e" });
+        setTimeout(() => setToast(null), 2400);
+      })
+      .catch(() => {});
   }, []);
 
   const saveRecords = useCallback(async (next) => {
     setRecords(next);
     try { localStorage.setItem("keiba-records-v3", JSON.stringify(next)); } catch {}
+  }, []);
+
+  const syncToCloud = useCallback(async (next) => {
+    if (!getToken()) return;
+    try { await uploadRecords(next); }
+    catch { /* ネットワークエラーは無視、手動同期で対応可 */ }
   }, []);
 
   const showToast = (msg, color = "#6cbc5e") => { setToast({ msg, color }); setTimeout(() => setToast(null), 2400); };
@@ -1140,7 +1164,9 @@ export default function App() {
       investment: totalInvestment, payout: totalPayout, pnl: totalPnl,
     };
 
-    await saveRecords([record, ...records]);
+    const nextRecords = [record, ...records];
+    await saveRecords(nextRecords);
+    syncToCloud(nextRecords);
     if (keepRace) {
       setForm(keepRaceInfo(form));
       showToast(anyHit ? `的中！ ${totalPnl >= 0 ? "+" : ""}${formatYen(totalPnl)} (続けて入力)` : `外れ 記録完了 (続けて入力)`);
@@ -1381,7 +1407,7 @@ export default function App() {
                 <div style={{ color: "#6b7a99", fontSize: 13, marginBottom: 20 }}>この操作は元に戻せません</div>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={() => setDeleteTarget(null)} style={{ flex: 1, padding: 10, borderRadius: 8, background: "#2a3550", border: "none", color: "#e4e6eb", cursor: "pointer", fontWeight: 600 }}>キャンセル</button>
-                  <button onClick={async () => { await saveRecords(records.filter(r => r.id !== deleteTarget)); setDeleteTarget(null); showToast("削除しました", "#888"); }}
+                  <button onClick={async () => { const next = records.filter(r => r.id !== deleteTarget); await saveRecords(next); syncToCloud(next); setDeleteTarget(null); showToast("削除しました", "#888"); }}
                     style={{ flex: 1, padding: 10, borderRadius: 8, background: "#e05555", border: "none", color: "#fff", cursor: "pointer", fontWeight: 700 }}>削除</button>
                 </div>
               </div>
