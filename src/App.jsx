@@ -320,43 +320,55 @@ function OddsStepper({ value, onChange, oddsMode }) {
   const stepBtn = { width: 28, height: 30, borderRadius: 6, border: "1px solid #2a4a3a", background: "#1a3a1a", color: "#6cbc5e", fontSize: 16, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1, flexShrink: 0 };
   const inputStyleOdds = { flex: 1, minWidth: 60, background: "#1e2a40", border: "1px solid #2a3550", borderRadius: 4, color: "#e4e6eb", fontSize: 14, fontWeight: 700, padding: "4px 8px", fontFamily: "monospace", textAlign: "right" };
 
+  // 入力中の文字列をローカルに保持し、確定時だけスナップして親へ通知
+  const [draft, setDraft] = useState(null); // null = 非編集中
+
   if (oddsMode === "per100") {
-    // 100円払戻モード：10円単位ステッパー（複勝1.5倍=150円などに対応）
     const yenVal = value > 0 ? Math.round(value * 100) : 0;
-    const setYen = (n) => {
-      const snapped = Math.max(0, Math.round(n / 10) * 10);
+    const commitYen = (n) => {
+      const snapped = Math.max(0, Math.round(Number(n) / 10) * 10);
       onChange(snapped > 0 ? snapped / 100 : 0);
+      setDraft(null);
     };
+    const stepYen = (delta) => commitYen(yenVal + delta);
+    const displayVal = draft !== null ? draft : (yenVal || "");
     return (
       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-        <button onClick={() => setYen(yenVal - 10)} style={stepBtn}>−</button>
-        <input type="number" min="0" step="10" value={yenVal || ""}
-          onChange={e => {
-            const n = Number(e.target.value);
-            onChange(n > 0 ? Math.round(n / 10) * 10 / 100 : 0);
-          }}
+        <button onClick={() => stepYen(-10)} style={stepBtn}>−</button>
+        <input
+          type="number" min="0" inputMode="numeric"
+          value={displayVal}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={e => commitYen(e.target.value)}
           placeholder="2340"
           style={inputStyleOdds} />
         <span style={{ fontSize: 11, color: "#6b7a99", flexShrink: 0 }}>円</span>
-        <button onClick={() => setYen(yenVal + 10)} style={stepBtn}>＋</button>
+        <button onClick={() => stepYen(+10)} style={stepBtn}>＋</button>
       </div>
     );
   }
+
   // 倍率モード：0.1単位ステッパー
-  const setMult = (n) => {
-    const snapped = Math.max(0, Math.round(n * 10) / 10);
-    onChange(snapped);
-  };
   const v = value || 0;
+  const commitMult = (n) => {
+    const snapped = Math.max(0, Math.round(Number(n) * 10) / 10);
+    onChange(snapped);
+    setDraft(null);
+  };
+  const stepMult = (delta) => commitMult(v + delta);
+  const displayMult = draft !== null ? draft : (v || "");
   return (
     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-      <button onClick={() => setMult(v - 0.1)} style={stepBtn}>−</button>
-      <input type="number" min="0" step="0.1" value={v || ""}
-        onChange={e => setMult(Number(e.target.value))}
+      <button onClick={() => stepMult(-0.1)} style={stepBtn}>−</button>
+      <input
+        type="number" min="0" step="0.1" inputMode="decimal"
+        value={displayMult}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={e => commitMult(e.target.value)}
         placeholder="23.4"
         style={inputStyleOdds} />
       <span style={{ fontSize: 11, color: "#6b7a99", flexShrink: 0 }}>倍</span>
-      <button onClick={() => setMult(v + 0.1)} style={stepBtn}>＋</button>
+      <button onClick={() => stepMult(+0.1)} style={stepBtn}>＋</button>
     </div>
   );
 }
