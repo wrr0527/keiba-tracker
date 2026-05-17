@@ -19,18 +19,31 @@ const BET_TYPE_CONFIG = {
   三連単: { sep: "→",  max: 18, slots: 3, ordered: true  },
 };
 
+const ANALYSIS_RANK = { 的中: 5, 順番違い: 4, "1頭違い": 3, 軸のみ: 2, 相手のみ: 1, 完敗: 0 };
+const ANALYSIS_COLORS = {
+  的中: { bg: "#1a4a1a", fg: "#6cbc5e", border: "#6cbc5e" },
+  順番違い: { bg: "#493c18", fg: "#e8c86a", border: "#725c24" },
+  "1頭違い": { bg: "#2f3d1d", fg: "#b7d46a", border: "#4f652c" },
+  軸のみ: { bg: "#1d3146", fg: "#88c0ff", border: "#3a5d82" },
+  相手のみ: { bg: "#2d2848", fg: "#b6a0ff", border: "#574b88" },
+  完敗: { bg: "#3a1a1a", fg: "#e05555", border: "#5a2a2a" },
+};
+
 const GRADED_RACES = {
-  G1: ["フェブラリーS","高松宮記念","大阪杯","桜花賞","皐月賞","天皇賞（春）","NHKマイルC","ヴィクトリアマイル","優駿牝馬（オークス）","東京優駿（日本ダービー）","安田記念","宝塚記念","スプリンターズS","秋華賞","菊花賞","天皇賞（秋）","エリザベス女王杯","マイルCS","ジャパンC","チャンピオンズC","阪神JF","朝日杯FS","有馬記念","ホープフルS"],
-  G2: ["AJCC","中山記念","阪急杯","金鯱賞","フローラS","青葉賞","京都新聞杯","目黒記念","エプソムC","ラジオNIKKEI賞（春）","プロキオンS","クイーンS","関屋記念","小倉記念","レパードS","新潟2歳S","セントウルS","オールカマー","神戸新聞杯","ローズS","毎日王冠","府中牝馬S","富士S","アルテミスS","デイリー杯2歳S","スワンS","京王杯2歳S","ステイヤーズS","チャレンジC","中日新聞杯","阪神C"],
-  G3: ["京成杯","シンザン記念","愛知杯","根岸S","シルクロードS","東京新聞杯","きさらぎ賞","クイーンC","共同通信杯","小倉大賞典","アーリントンC","フィリーズレビュー","スプリングS","ニュージーランドT","アンタレスS","福島牝馬S","メトロポリタンS","葵S","鳴尾記念","ユニコーンS","マーメイドS","七夕賞","函館スプリントS","函館2歳S","アイビスSD","キーンランドC","紫苑S","ラジオNIKKEI賞（秋）","ファンタジーS","カシオペアS","東京盃","武蔵野S","みやこS","東スポ2歳S","福島記念","京阪杯","キャピタルS","京都大賞典","サウジアラビアRC","ターコイズS","中山大障害","CBC賞","札幌2歳S","京成杯AH","新潟記念"],
-  Jpn1: ["川崎記念","帝王賞","JBCクラシック","JBCスプリント","JBCレディスクラシック","JBC2歳優駿","東京大賞典","かしわ記念","さきたま杯","マイルチャンピオンシップ南部杯","全日本2歳優駿"],
-  Jpn2: ["名古屋大賞典","ダイオライト記念","兵庫チャンピオンシップ","エンプレス杯","ブリーダーズGC","マーキュリーC","日本TV盃","レディスプレリュード","白山大賞典","浦和記念","兵庫ゴールドT"],
-  Jpn3: ["兵庫ジュニアGP","スパーキングレディーC","クラスターC","北海道スプリントC","関東オークス","エーデルワイス賞","マリーンC","習志野きらっとスプリント","名古屋グランプリ"],
-  地方重賞: ["東京ダービー","羽田盃","ジャパンダートクラシック","大井記念","京浜盃","南関東クラシック","黒船賞","佐賀記念","高知県知事賞","東海ダービー","名古屋記念","笠松グランプリ","ハイセイコー記念"],
+  G1: ["フェブラリーS","高松宮記念","大阪杯","桜花賞","皐月賞","天皇賞（春）","NHKマイルC","ヴィクトリアマイル","オークス","優駿牝馬（オークス）","日本ダービー","東京優駿（日本ダービー）","安田記念","宝塚記念","スプリンターズS","秋華賞","菊花賞","天皇賞（秋）","エリザベス女王杯","マイルチャンピオンシップ","マイルCS","ジャパンC","チャンピオンズC","阪神ジュベナイルF","阪神JF","朝日杯フューチュリティS","朝日杯FS","ホープフルS","有馬記念"],
+  G2: ["日経新春杯","アメリカJCC","AJCC","プロキオンS","京都記念","中山記念","チューリップ賞","フィリーズレビュー","弥生賞","弥生賞ディープインパクト記念","スプリングS","金鯱賞","阪神大賞典","日経賞","ニュージーランドT","阪神牝馬S","青葉賞","フローラS","マイラーズC","京王杯スプリングC","京王杯SC","京都新聞杯","目黒記念","札幌記念","紫苑S","セントウルS","ローズS","セントライト記念","オールカマー","神戸新聞杯","毎日王冠","京都大賞典","アイルランドT","スワンS","富士S","京王杯2歳S","アルゼンチン共和国杯","デイリー杯2歳S","東スポ杯2歳S","東京スポーツ杯2歳S","ステイヤーズS","阪神C"],
+  G3: ["中山金杯","京都金杯","フェアリーS","シンザン記念","京成杯","小倉牝馬S","根岸S","シルクロードS","東京新聞杯","きさらぎ賞","クイーンC","共同通信杯","ダイヤモンドS","阪急杯","小倉大賞典","オーシャンS","中山牝馬S","フラワーC","ファルコンS","愛知杯","毎日杯","マーチS","ダービー卿チャレンジT","ダービー卿CT","チャーチルダウンズC","アーリントンC","アンタレスS","福島牝馬S","ユニコーンS","エプソムC","新潟大賞典","平安S","葵S","函館スプリントS","府中牝馬S","しらさぎS","ラジオNIKKEI賞","函館記念","北九州記念","七夕賞","小倉記念","函館2歳S","関屋記念","東海S","アイビスサマーダッシュ","アイビスSD","クイーンS","エルムS","レパードS","CBC賞","中京記念","新潟2歳S","キーンランドC","新潟記念","中京2歳S","京成杯オータムH","京成杯AH","札幌2歳S","チャレンジC","シリウスS","サウジアラビアロイヤルC","サウジアラビアRC","アルテミスS","ファンタジーS","みやこS","武蔵野S","福島記念","京都2歳S","京阪杯","鳴尾記念","中日新聞杯","カペラS","ターコイズS","東スポ杯2歳S","東京スポーツ杯2歳S","富士S"],
+  Jpn1: ["川崎記念","羽田盃","かしわ記念","東京ダービー","さきたま杯","帝王賞","ジャパンダートクラシック","マイルチャンピオンシップ南部杯","JBCレディスクラシック","JBCスプリント","JBCクラシック","全日本2歳優駿","東京大賞典"],
+  Jpn2: ["ダイオライト記念","京浜盃","兵庫チャンピオンシップ","名古屋グランプリ","エンプレス杯","関東オークス","不来方賞","日本テレビ盃","日本TV盃","レディスプレリュード","東京盃","浦和記念","兵庫ジュニアグランプリ","兵庫ジュニアGP"],
+  Jpn3: ["ブルーバードカップ","佐賀記念","クイーン賞","雲取賞","かきつばた記念","黒船賞","兵庫女王盃","東京スプリント","スパーキングレディーカップ","スパーキングレディーC","マーキュリーカップ","マーキュリーC","クラスターカップ","クラスターC","北海道スプリントカップ","北海道スプリントC","ブリーダーズゴールドカップ","ブリーダーズGC","サマーチャンピオン","テレ玉杯オーバルスプリント","白山大賞典","マリーンカップ","マリーンC","エーデルワイス賞","JBC2歳優駿","名古屋大賞典","兵庫ゴールドトロフィー","兵庫ゴールドT"],
+  地方重賞: ["帯広記念","天馬賞","川崎マイラーズ","新春賞","名古屋記念","佐賀若駒賞","ニューイヤーカップ","ゴールドスプリント","新春ペガサスカップ","コウノトリ賞","大高坂賞","報知グランプリカップ","白銀争覇","兵庫クイーンセレクション","ヒロインズカップ","花吹雪賞","金盃","梅見月杯","兵庫ウインターカップ","翔雲賞","黒潮スプリンターズカップ","ゴールドジュニア","報知オールスターカップ","黒ユリ賞","飛燕賞","スプリングカップ","白鷺賞","チャンピオンカップ","だるま夕日賞","ブルーリボンマイル","兵庫ユースカップ","たんぽぽ賞","レジーナディンヴェルノ賞","ユングフラウ賞","ポプラ賞","御厨人窟賞","ジュニアグローリー","兵庫若駒賞","イレネー記念","土佐春花賞","九州クラウン","京成盃グランドマイラーズ","フジノウェーブ記念","若草賞土古記念","ばんえい記念","ネクストスター東日本","桜花賞","マーチカップ","あやめ賞","ネクストスター西日本","白嶺賞","はがくれ大賞典","ネクストスター中日本","菊水賞","ネクストスター北日本","ル・プランタン賞","クラウンカップ","東海桜花賞","東海クイーンカップ","金沢スプリングカップ","二十四万石賞","佐賀がばいスプリント","赤松杯","ブリリアントカップ","飛山濃水杯","留守杯日高賞","ノトキリシマ賞","佐賀ヴィーナスカップ","しらさぎ賞","エトワール賞","栗駒賞","利家盃","新緑賞","東京プリンセス賞","北斗盃","ダイヤモンドカップ","黒潮皐月賞","佐賀皐月賞","駿蹄賞","兵庫大賞典","コスモバルク記念","東京湾カップ","西日本クラシック","お松の方賞","フロイラインスプリント","オグリキャップ記念","カーネーションカップ","ばんえい十勝オッズパーク杯","シアンモア記念","北日本新聞杯","佐賀スプリングカップ","大井記念","ヒダカソウカップ","のじぎく賞","イーハトーブマイル","福永洋一記念","プラチナカップ","あすなろ賞","九州優駿栄城賞","若潮スプリント","東海優駿","グランシャリオ門別スプリント","六甲盃","東北優駿","百万石賞","北海優駿","ぎふ清流カップ","北斗賞","早池峰スーパースプリント","石川優駿","佐賀王冠賞","川崎スパーキングスプリント","赤レンガ記念","園田FCスプリント","ウイナーカップ","高知優駿","栄冠賞","フロイラインカップ","トリトン争覇","兵庫優駿","柏林賞","一條記念みちのく大賞典","加賀友禅賞","佐賀ユースカップ","サファイア賞","ハヤテスプリント","金沢クイーン賞","星雲賞","兵庫サマークイーン賞","旭川記念","岩鷲賞","兼六園スプリント","いしがきマイラーズ","サンタアニタトロフィー","ノースクイーンカップ","優駿スプリント","吉野ヶ里記念","ばんえい大賞典","やまびこ賞","日本海スプリント","トレノ賞","名港盃","若鮎賞","霧島賞","リリーカップ","王冠賞","百万石かがやきナイター賞","せきれい賞","習志野きらっとスプリント","ポラリスサマースプリント","ひまわり賞(オークス)","黒潮菊花賞","旭岳賞","オパールカップ","読売レディス杯","サッポロクラシックカップ","ばんえいグランプリ","フェアリーカップ","岐阜金賞","黒潮盃","くろゆり賞","摂津盃","ジュニアグランプリ","フルールカップ","ルーキーズサマーカップ","ブリーダーズゴールドジュニアカップ","ベイスプリント","はまなす賞","岩手県知事杯OROカップ","九州チャンピオンシップ","スパーキングサマーカップ","フリオーソレジェンドカップ","撫子争覇","ビギナーズカップ","アフター5スター賞","秋桜賞","ビューチフルドリーマーカップ","サラブレッド大賞典","西日本3歳優駿","戸塚記念","若武者賞","岩見沢記念","石川テレビ杯","百万石スプリント","建依別賞","若駒賞","九州ジュニアチャンピオン","東京記念","フローラルカップ","秋の鞍","園田プリンセスカップ","青藍賞","オータムカップ","ウポポイオータムスプリント","瑞穂賞","兵庫ジュベナイルカップ","園田チャレンジカップ","銀河賞","オータムティアラ","珊瑚冠賞","イヌワシ賞","サンライズカップ","ネクストスター門別","姫山菊花賞","ヴィーナススプリント","鳥栖大賞","グランシャリオクイーンズ","園田オータムトロフィー","金沢鼓門賞","ナナカマド賞","ネクストスター盛岡","金沢シンデレラカップ","ネクストスター佐賀","鎌倉記念","ゴールド争覇","兵庫ゴールドカップ","トパーズカップ","MRO金賞","佐賀オータムスプリント","マイルグランプリ","ネクストスター笠松","東海クラウン","兵庫クイーンカップ","金沢スプリントカップ","北見記念","プリンセスカップ","ネクストスター高知","ロータスクラウン賞","ネクストスター金沢","埼玉新聞栄冠賞","ネクストスター園田","ネクストスター名古屋","ばんえい菊花賞","すずらん賞","土佐秋月賞","九州大賞典","北海道2歳スプリント","道営スプリント","平和賞","道営記念","楠賞","クインカップ","北國王冠","黒潮マイルチャンピオンシップ","カペラ賞","南部駒賞","ハイセイコー記念","ブロッサムカップ","東海菊花賞","レジェンドハンター記念","絆カップ","徽軫賞","ウインターチャンピオン","ローレル賞","ロジータ記念","ラブミーチャン記念","ドリームエイジカップ","寒菊賞","金沢ヤングチャンピオン","笠松グランプリ","園田金盃","ばんえいオークス","北上川大賞典","フォーマルハウト賞","勝島王冠","ジェムストーン賞","中日杯","九州産グランプリ","船橋記念","ゴールドウィング賞","トウケイニセイ記念","金杯","ゴールドカップ","金沢ファンセレクトカップ2025","金の鞍賞","中島記念","ヤングチャンピオンシップ","ばんえいダービー","東京シンデレラマイル","ライデンリーダー記念","桐花賞","東京2歳優駿牝馬","東海ゴールドカップ","園田ジュニアカップ","高知県知事賞"],
 };
 
 const GRADE_COLORS = { G1: "#e8c86a", G2: "#aab8d4", G3: "#c8a0d0", Jpn1: "#d4a875", Jpn2: "#a8b898", Jpn3: "#b898c0", 地方重賞: "#8090a8" };
-const GRADE_OPTIONS = { JRA: ["一般", "G3", "G2", "G1"], 地方: ["一般", "地方重賞", "Jpn3", "Jpn2", "Jpn1"] };
+const GRADE_OPTIONS = { JRA: ["平場", "OP", "G3", "G2", "G1"], 地方: ["平場", "OP", "地方重賞", "Jpn3", "Jpn2", "Jpn1"] };
+const PURCHASE_REASONS = ["勝負", "遊び", "現地", "テレビ観戦"];
+const CONFIDENCE_OPTIONS = ["A", "B", "C"];
+const MISS_REASONS = ["軸飛び", "相手抜け", "3着抜け", "買い目絞りすぎ", "完全読み違い"];
 
 const JOCKEYS = [
   // JRA トップ・主力
@@ -89,9 +102,15 @@ const newEntry = (mode = "manual") => ({
 
 const initialForm = {
   date: new Date().toISOString().slice(0, 10),
-  venueType: "JRA", venue: "", raceNo: "", grade: "一般", raceName: "",
+  venueType: "JRA", venue: "", raceNo: "", grade: "平場", raceName: "",
   betType: "三連単", entries: [newEntry("manual")],
   oddsMode: "per100",
+  result: { finishOrder: [], memo: "" },
+  review: {
+    purchaseReason: "", confidence: "",
+    axisPopularity: "", axisOdds: "",
+    expectationMemo: "", missReason: "", reflectionMemo: "",
+  },
 };
 
 const keepRaceInfo = (prev) => ({
@@ -99,6 +118,8 @@ const keepRaceInfo = (prev) => ({
   date: prev.date, venueType: prev.venueType, venue: prev.venue,
   raceNo: prev.raceNo, grade: prev.grade, raceName: prev.raceName,
   oddsMode: prev.oddsMode, betType: prev.betType,
+  result: { finishOrder: [], memo: "" },
+  review: { ...initialForm.review, purchaseReason: prev.review?.purchaseReason || "", confidence: prev.review?.confidence || "" },
 });
 
 // ── 組み合わせ生成（変更なし） ─────────────
@@ -190,12 +211,124 @@ function computeEntry(entry, betType) {
   if (entry.mode === "formation") return computeFormation(entry.columns, betType);
   return { combinations: [], summary: "" };
 }
+
+function parseCombo(combo, betType) {
+  const { slots, sep } = BET_TYPE_CONFIG[betType];
+  const parts = slots === 1 ? [combo] : String(combo).split(sep);
+  return parts.map(v => Number(String(v).trim())).filter(n => Number.isFinite(n) && n > 0);
+}
+
+function sameSet(a, b) {
+  if (a.length !== b.length) return false;
+  const aa = sorted(a); const bb = sorted(b);
+  return aa.every((v, i) => v === bb[i]);
+}
+
+function countOverlap(a, b) {
+  const bs = new Set(b);
+  return [...new Set(a)].filter(v => bs.has(v)).length;
+}
+
+function computeWinningCombos(finishOrder, betType) {
+  const top = (finishOrder || []).map(Number).filter(n => n > 0);
+  const [first, second, third] = top;
+  if (!first) return [];
+  switch (betType) {
+    case "単勝":
+    case "複勝":
+      return betType === "単勝" ? [String(first)] : top.slice(0, 3).map(String);
+    case "枠連":
+    case "馬連":
+      return first && second ? [sorted([first, second]).join("-")] : [];
+    case "馬単":
+      return first && second ? [`${first}→${second}`] : [];
+    case "ワイド":
+      return top.length >= 3
+        ? [sorted([first, second]).join("-"), sorted([first, third]).join("-"), sorted([second, third]).join("-")]
+        : [];
+    case "三連複":
+      return top.length >= 3 ? [sorted(top.slice(0, 3)).join("-")] : [];
+    case "三連単":
+      return top.length >= 3 ? [`${first}→${second}→${third}`] : [];
+    default:
+      return [];
+  }
+}
+
+function getEntryFocus(entry, betType) {
+  if (entry.mode === "wheel") return { axis: entry.axisHorses || [], pool: entry.poolHorses || [] };
+  if (entry.mode === "formation") {
+    const columns = entry.columns || [];
+    return { axis: columns[0] || [], pool: [...new Set(columns.slice(1).flat())] };
+  }
+  if (BET_TYPE_CONFIG[betType].ordered) {
+    const combos = computeEntry(entry, betType).combinations;
+    const firsts = combos.map(c => parseCombo(c, betType)[0]).filter(Boolean);
+    const uniqueFirsts = [...new Set(firsts)];
+    if (uniqueFirsts.length === 1) {
+      const all = combos.flatMap(c => parseCombo(c, betType));
+      return { axis: uniqueFirsts, pool: [...new Set(all.filter(n => n !== uniqueFirsts[0]))] };
+    }
+  }
+  return { axis: [], pool: [] };
+}
+
+function analyzeCombo(combo, betType, finishOrder, entry) {
+  const winningCombos = computeWinningCombos(finishOrder, betType);
+  if (winningCombos.length === 0) return null;
+  if (winningCombos.includes(combo)) return { label: "的中", reason: "的中組み合わせと完全一致" };
+
+  const cfg = BET_TYPE_CONFIG[betType];
+  const predicted = parseCombo(combo, betType);
+  const resultHorses = [...new Set(winningCombos.flatMap(c => parseCombo(c, betType)))];
+  const overlap = countOverlap(predicted, resultHorses);
+  const winningSameSet = winningCombos.some(c => sameSet(predicted, parseCombo(c, betType)));
+
+  if (cfg.ordered && winningSameSet) return { label: "順番違い", reason: "必要な馬は合っていたが着順違い" };
+  if (cfg.slots >= 2 && overlap >= Math.max(1, cfg.slots - 1)) return { label: "1頭違い", reason: `${cfg.slots}頭中${overlap}頭が一致` };
+
+  const { axis, pool } = getEntryFocus(entry, betType);
+  const axisOverlap = countOverlap(axis, resultHorses);
+  const poolOverlap = countOverlap(pool, resultHorses);
+  if (axis.length > 0 && axisOverlap > 0) return { label: "軸のみ", reason: "軸馬は来たが相手が足りない" };
+  if (pool.length > 0 && poolOverlap > 0) return { label: "相手のみ", reason: "相手候補だけが馬券圏内" };
+
+  return { label: "完敗", reason: overlap > 0 ? `${overlap}頭のみ一致` : "馬券圏内と噛み合わず" };
+}
+
+function bestAnalysis(analyses) {
+  const valid = analyses.filter(Boolean);
+  if (valid.length === 0) return null;
+  return valid.reduce((best, cur) => ANALYSIS_RANK[cur.label] > ANALYSIS_RANK[best.label] ? cur : best, valid[0]);
+}
+
+function analyzeEntry(entry, betType, finishOrder) {
+  const combos = computeEntry(entry, betType).combinations;
+  const perCombo = Object.fromEntries(combos.map(c => [c, analyzeCombo(c, betType, finishOrder, entry)]));
+  return { best: bestAnalysis(Object.values(perCombo)), perCombo };
+}
+
+function analyzeRecordEntries(entries, betType, finishOrder) {
+  const entryAnalyses = (entries || []).map(e => analyzeEntry(e, betType, finishOrder).best);
+  return bestAnalysis(entryAnalyses);
+}
+
+function autoMarkHits(entries, betType, finishOrder, clearWhenEmpty = false) {
+  const winning = new Set(computeWinningCombos(finishOrder, betType));
+  if (winning.size === 0) return clearWhenEmpty ? entries.map(e => ({ ...e, hitCombos: [] })) : entries;
+  return entries.map(e => {
+    const combos = computeEntry(e, betType).combinations;
+    const hitCombos = combos.filter(c => winning.has(c));
+    const oddsMap = Object.fromEntries(Object.entries(e.oddsMap || {}).filter(([c]) => hitCombos.includes(c)));
+    return { ...e, hitCombos, oddsMap };
+  });
+}
 function entryInvestment(entry, betType) {
   const { combinations } = computeEntry(entry, betType);
   return combinations.reduce((s, c) => s + (entry.amountMap?.[c] ?? entry.unitAmount), 0);
 }
 // 1エントリーの的中分の払戻合計
-function entryPayout(entry, betType) {
+function entryPayout(entry) {
   return (entry.hitCombos || []).reduce((sum, c) => {
     const amt = entry.amountMap?.[c] ?? entry.unitAmount;
     const odds = entry.oddsMap?.[c] || 0;
@@ -205,19 +338,19 @@ function entryPayout(entry, betType) {
 }
 
 // ── ユーティリティ ─────────────
-const normalizeOdds = (raw, mode) => { const n = Number(raw); if (!n || n <= 0) return 0; return mode === "per100" ? n / 100 : n; };
 const formatYen = v => { const n = Number(v); return isNaN(n) ? "¥0" : "¥" + n.toLocaleString("ja-JP"); };
 const dayOfWeek = s => ["日", "月", "火", "水", "木", "金", "土"][new Date(s).getDay()];
 const formatDate = s => { if (!s) return ""; const d = new Date(s); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${dayOfWeek(s)}）`; };
 
 // ── CSV / JSON ─────────────
 function recordsToCSV(records) {
-  const headers = ["日付","競馬場区分","競馬場","R","グレード","レース名","券種","点数","投資額","的中","払戻金","収支","買い目","タグ"];
+  const headers = ["日付","競馬場区分","競馬場","R","グレード","レース名","券種","点数","投資額","的中","判定","購入理由","自信度","軸馬人気","軸馬オッズ","外れ方","払戻金","収支","結果","結果メモ","期待値メモ","反省","買い目","タグ"];
   const esc = v => { const s = String(v ?? "").replace(/"/g, '""'); return /[,"\n]/.test(s) ? `"${s}"` : s; };
   const rows = records.map(r => [
     r.date, r.venueType || "", r.venue || "", r.raceNo || "", r.grade || "", r.raceName || "",
-    r.betType, r.points, r.investment, r.isHit ? "○" : "×",
-    r.payout, r.pnl, (r.combination || "").replace(/\n/g, " | "),
+    r.betType, r.points, r.investment, r.isHit ? "○" : "×", r.analysis?.label || "",
+    r.review?.purchaseReason || "", r.review?.confidence || "", r.review?.axisPopularity || "", r.review?.axisOdds || "", r.review?.missReason || "",
+    r.payout, r.pnl, computeWinningCombos(r.result?.finishOrder || [], r.betType).join(" / "), r.result?.memo || "", r.review?.expectationMemo || "", r.review?.reflectionMemo || "", (r.combination || "").replace(/\n/g, " | "),
     (r.tags || []).join(" | "),
   ]);
   return [headers, ...rows].map(row => row.map(esc).join(",")).join("\n");
@@ -234,12 +367,37 @@ function downloadFile(filename, content, mime) {
   } catch { return false; }
 }
 
+function loadLocalRecords() {
+  try {
+    const v = localStorage.getItem("keiba-records-v3");
+    return v ? JSON.parse(v) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistLocalRecords(records) {
+  try {
+    localStorage.setItem("keiba-records-v3", JSON.stringify(records));
+  } catch {
+    // localStorage may be unavailable in private or constrained browser contexts.
+  }
+}
+
+function makeRecordId() {
+  return Date.now();
+}
+
+function recordRoi(record) {
+  return record.investment > 0 ? (record.payout / record.investment) * 100 : 0;
+}
+
 // ── 共通スタイル ─────────────
 const inputStyle = { width: "100%", background: "#1e2a40", border: "1px solid #2a3550", borderRadius: 8, color: "#e4e6eb", padding: "10px 12px", fontSize: 14, marginBottom: 14, boxSizing: "border-box", outline: "none" };
 
 function Label({ children }) { return <div style={{ fontSize: 11, color: "#6b7a99", fontWeight: 700, marginBottom: 6, letterSpacing: 0.5 }}>{children}</div>; }
 function BetTypeBadge({ type }) { const c = { 単勝: "#e8a838", 複勝: "#6cbc5e", 枠連: "#5b8fd4", 馬連: "#d46b8f", ワイド: "#8f6bd4", 馬単: "#d48c5b", 三連複: "#5bbcbc", 三連単: "#d45b5b" }; return <span style={{ background: c[type] || "#666", color: "#fff", padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, whiteSpace: "nowrap" }}>{type}</span>; }
-function GradeBadge({ grade }) { if (!grade || grade === "一般") return null; return <span style={{ background: GRADE_COLORS[grade], color: "#1a1a2e", padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>{grade}</span>; }
+function GradeBadge({ grade }) { if (!grade || ["一般", "平場"].includes(grade)) return null; return <span style={{ background: GRADE_COLORS[grade] || "#2a3a55", color: GRADE_COLORS[grade] ? "#1a1a2e" : "#b8d0ff", padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>{grade}</span>; }
 function StatMini({ label, value, color = "#e4e6eb", small }) { return <div style={{ textAlign: "center" }}><div style={{ fontSize: small ? 10 : 11, color: "#6b7a99", marginBottom: 2 }}>{label}</div><div style={{ fontSize: small ? 11 : 13, fontWeight: 700, color, fontFamily: "monospace" }}>{value}</div></div>; }
 function BigStat({ label, value, color = "#e4e6eb" }) { return <div style={{ background: "#1e2a40", borderRadius: 10, padding: "12px 14px" }}><div style={{ fontSize: 11, color: "#6b7a99", marginBottom: 4 }}>{label}</div><div style={{ fontSize: 16, fontWeight: 800, color, fontFamily: "monospace" }}>{value}</div></div>; }
 function PnLText({ value }) { return <span style={{ color: value === 0 ? "#888" : value > 0 ? "#6cbc5e" : "#e05555", fontWeight: 700, fontFamily: "monospace", fontSize: 14 }}>{value > 0 ? "+" : ""}{formatYen(value)}</span>; }
@@ -360,11 +518,17 @@ function OddsStepper({ value, onChange, oddsMode }) {
   const stepBtn = { width: 28, height: 30, borderRadius: 6, border: "1px solid #2a4a3a", background: "#1a3a1a", color: "#6cbc5e", fontSize: 16, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1, flexShrink: 0 };
   const inputStyleOdds = { flex: 1, minWidth: 60, background: "#1e2a40", border: "1px solid #2a3550", borderRadius: 4, color: "#e4e6eb", fontSize: 14, fontWeight: 700, padding: "4px 8px", fontFamily: "monospace", textAlign: "right" };
 
-  // 入力中の文字列をローカルに保持し、確定時だけスナップして親へ通知
+  // 入力中も親へ反映して、保存ボタン操作と入力確定の順番に左右されないようにする
   const [draft, setDraft] = useState(null); // null = 非編集中
 
   if (oddsMode === "per100") {
     const yenVal = value > 0 ? Math.round(value * 100) : 0;
+    const applyYenDraft = (raw) => {
+      setDraft(raw);
+      const n = Number(raw);
+      if (raw === "" || !Number.isFinite(n) || n <= 0) onChange(0);
+      else onChange(n / 100);
+    };
     const commitYen = (n) => {
       const snapped = Math.max(0, Math.round(Number(n) / 10) * 10);
       onChange(snapped > 0 ? snapped / 100 : 0);
@@ -378,7 +542,7 @@ function OddsStepper({ value, onChange, oddsMode }) {
         <input
           type="number" min="0" inputMode="numeric"
           value={displayVal}
-          onChange={e => setDraft(e.target.value)}
+          onChange={e => applyYenDraft(e.target.value)}
           onBlur={e => commitYen(e.target.value)}
           placeholder="2340"
           style={inputStyleOdds} />
@@ -390,6 +554,12 @@ function OddsStepper({ value, onChange, oddsMode }) {
 
   // 倍率モード：0.1単位ステッパー
   const v = value || 0;
+  const applyMultDraft = (raw) => {
+    setDraft(raw);
+    const n = Number(raw);
+    if (raw === "" || !Number.isFinite(n) || n <= 0) onChange(0);
+    else onChange(n);
+  };
   const commitMult = (n) => {
     const snapped = Math.max(0, Math.round(Number(n) * 10) / 10);
     onChange(snapped);
@@ -403,7 +573,7 @@ function OddsStepper({ value, onChange, oddsMode }) {
       <input
         type="number" min="0" step="0.1" inputMode="decimal"
         value={displayMult}
-        onChange={e => setDraft(e.target.value)}
+        onChange={e => applyMultDraft(e.target.value)}
         onBlur={e => commitMult(e.target.value)}
         placeholder="23.4"
         style={inputStyleOdds} />
@@ -646,13 +816,89 @@ function FormationEditor({ entry, onChange, betType }) {
 }
 
 // ── 組み合わせリスト（チェック・金額・オッズ） ─────────────
-function CombinationsList({ entry, combinations, onChange, oddsMode }) {
+function AnalysisBadge({ label }) {
+  if (!label) return null;
+  const c = ANALYSIS_COLORS[label] || ANALYSIS_COLORS.完敗;
+  return <span style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.fg, padding: "2px 7px", borderRadius: 10, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{label}</span>;
+}
+
+function OptionChips({ options, value, onChange, color = "#e8c86a", allowClear = true }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {options.map(opt => {
+        const active = value === opt;
+        return (
+          <button key={opt} onClick={() => onChange(active && allowClear ? "" : opt)}
+            style={{ padding: "7px 11px", borderRadius: 8, border: "1.5px solid", fontSize: 12, fontWeight: 800, cursor: "pointer",
+              background: active ? color : "#1e2a40", color: active ? "#0d1117" : "#8899bb",
+              borderColor: active ? color : "#2a3550",
+            }}>{opt}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SearchableRaceNameInput({ value, onChange, grade }) {
+  const [focused, setFocused] = useState(false);
+  const wrapperRef = useRef(null);
+  const options = useMemo(() => [...new Set(GRADED_RACES[grade] || [])], [grade]);
+  const query = value.trim().toLowerCase();
+  const suggestions = useMemo(() => {
+    if (options.length === 0) return [];
+    const scored = options
+      .filter(name => !query || name.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const as = a.toLowerCase().startsWith(query);
+        const bs = b.toLowerCase().startsWith(query);
+        if (as && !bs) return -1;
+        if (!as && bs) return 1;
+        return a.localeCompare(b, "ja");
+      });
+    return scored.slice(0, 12);
+  }, [options, query]);
+
+  useEffect(() => {
+    const handler = e => { if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setFocused(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} style={{ position: "relative" }}>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        placeholder={["一般", "平場"].includes(grade) ? "例：第5回中山11R" : "候補を検索、または直接入力"}
+        style={{ ...inputStyle, marginBottom: 0 }}
+      />
+      {focused && suggestions.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "#0f1420", border: "1px solid #2a3550", borderRadius: 8, maxHeight: 280, overflowY: "auto", zIndex: 30, boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>
+          {suggestions.map(name => (
+            <button key={name} onClick={() => { onChange(name); setFocused(false); }}
+              style={{ width: "100%", padding: "10px 12px", background: "transparent", border: "none", borderBottom: "1px solid #1e2a40", color: "#e4e6eb", fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      {!["一般", "平場"].includes(grade) && (
+        <div style={{ fontSize: 10, color: "#6b7a99", marginTop: 4 }}>候補にないレース名もそのまま入力できます</div>
+      )}
+    </div>
+  );
+}
+
+function CombinationsList({ entry, combinations, onChange, analysisPerCombo, resultDriven }) {
   const [showAmounts, setShowAmounts] = useState(false);
   const customCount = Object.keys(entry.amountMap || {}).filter(k => combinations.includes(k)).length;
 
   if (combinations.length === 0) return null;
 
   const toggleHit = (combo) => {
+    if (resultDriven) return;
     const next = new Set(entry.hitCombos || []);
     if (next.has(combo)) next.delete(combo); else next.add(combo);
     onChange({ ...entry, hitCombos: [...next] });
@@ -665,20 +911,6 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
     onChange({ ...entry, amountMap: map });
   };
 
-  const setOdds = (combo, raw) => {
-    const map = { ...(entry.oddsMap || {}) };
-    const mult = normalizeOdds(raw, oddsMode);
-    if (mult > 0) map[combo] = mult;
-    else delete map[combo];
-    onChange({ ...entry, oddsMap: map });
-  };
-
-  const getOddsDisplay = (combo) => {
-    const mult = entry.oddsMap?.[combo];
-    if (!mult) return "";
-    return oddsMode === "per100" ? Math.round(mult * 100) : mult;
-  };
-
   return (
     <div style={{ marginTop: 14, background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -688,31 +920,26 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
         </button>
       </div>
 
-      <div style={{ background: "#1a2540", border: "1.5px solid #3a4f7a", borderRadius: 8, padding: "10px 12px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 28, lineHeight: 1 }}>☐</span>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#b8d0ff", lineHeight: 1.4 }}>をタップして的中をチェック</div>
-          <div style={{ fontSize: 11, color: "#6b7a99", marginTop: 2 }}>チェックするとオッズ入力欄が表示されます</div>
-        </div>
-      </div>
-
       <div style={{ maxHeight: 360, overflowY: "auto" }}>
         {combinations.map(combo => {
           const isHit = (entry.hitCombos || []).includes(combo);
           const amount = entry.amountMap?.[combo] ?? entry.unitAmount;
           const customAmt = entry.amountMap?.[combo];
+          const analysis = analysisPerCombo?.[combo];
 
           return (
             <div key={combo} style={{ padding: "8px 0", borderBottom: "1px solid #1e2a40" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {/* チェックボックス */}
-                <button onClick={() => toggleHit(combo)}
+                <button onClick={() => toggleHit(combo)} disabled={resultDriven}
+                  title={resultDriven ? "レース結果から自動判定されます" : "手動で的中を切り替え"}
                   style={{
                     width: 36, height: 36, borderRadius: 8, padding: 0, lineHeight: 1,
                     border: `2.5px solid ${isHit ? "#6cbc5e" : "#5a7aaa"}`,
                     background: isHit ? "#6cbc5e" : "#1a2a45",
                     color: isHit ? "#0d1117" : "#5a7aaa", fontSize: 20, fontWeight: 900,
-                    cursor: "pointer", flexShrink: 0, boxShadow: isHit ? "0 0 8px #6cbc5e66" : "none",
+                    cursor: resultDriven ? "default" : "pointer", flexShrink: 0, boxShadow: isHit ? "0 0 8px #6cbc5e66" : "none",
+                    opacity: resultDriven && !isHit ? 0.55 : 1,
                   }}>{isHit ? "✓" : "□"}</button>
 
                 {/* 組み合わせ表示 */}
@@ -720,6 +947,8 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
                   color: isHit ? "#6cbc5e" : (customAmt ? "#e8c86a" : "#e4e6eb") }}>
                   {combo}
                 </div>
+
+                {analysis && <AnalysisBadge label={analysis.label} />}
 
                 {/* 金額 */}
                 {showAmounts ? (
@@ -731,29 +960,6 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
                 )}
               </div>
 
-              {/* 的中時のみオッズ入力 */}
-              {isHit && (
-                <div style={{ marginTop: 8, marginLeft: 32, padding: "8px 10px", background: "#1a2a1a", borderRadius: 6, border: "1px solid #2a3a2a" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontSize: 10, color: "#6cbc5e", fontWeight: 700 }}>オッズ</span>
-                    {entry.oddsMap?.[combo] && (
-                      <span style={{ fontSize: 11, color: "#6cbc5e", fontFamily: "monospace", fontWeight: 700 }}>
-                        払戻 {formatYen(Math.floor((amount * entry.oddsMap[combo]) / 10) * 10)}
-                      </span>
-                    )}
-                  </div>
-                  <OddsStepper
-                    value={entry.oddsMap?.[combo] || 0}
-                    onChange={mult => {
-                      const map = { ...(entry.oddsMap || {}) };
-                      if (mult > 0) map[combo] = mult;
-                      else delete map[combo];
-                      onChange({ ...entry, oddsMap: map });
-                    }}
-                    oddsMode={oddsMode}
-                  />
-                </div>
-              )}
             </div>
           );
         })}
@@ -763,14 +969,14 @@ function CombinationsList({ entry, combinations, onChange, oddsMode }) {
 }
 
 // ── 通常モード用のチェック付きリスト ─────────────
-function ManualHitChecker({ entry, onChange, oddsMode }) {
+function ManualHitChecker({ entry, onChange, analysisPerCombo, resultDriven }) {
   const lines = (entry.text || "").split("\n").map(s => s.trim()).filter(Boolean);
   if (lines.length === 0) return null;
-  return <CombinationsList entry={entry} combinations={lines} onChange={onChange} oddsMode={oddsMode} />;
+  return <CombinationsList entry={entry} combinations={lines} onChange={onChange} analysisPerCombo={analysisPerCombo} resultDriven={resultDriven} />;
 }
 
 // ── 買い目エントリーカード ─────────────
-function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, allHistoryTags, oddsMode }) {
+function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, allHistoryTags, finishOrder }) {
   const cfg = BET_TYPE_CONFIG[betType];
   const result = computeEntry(entry, betType);
   const modeDisabled = { wheel: cfg.slots === 1, formation: cfg.slots === 1 };
@@ -781,6 +987,8 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
   const hitCount = (entry.hitCombos || []).filter(c => result.combinations.includes(c)).length;
   const isHit = hitCount > 0;
   const missingOdds = (entry.hitCombos || []).filter(c => result.combinations.includes(c) && !entry.oddsMap?.[c]);
+  const entryAnalysis = analyzeEntry(entry, betType, finishOrder || []);
+  const resultDriven = computeWinningCombos(finishOrder || [], betType).length > 0;
 
   return (
     <div style={{ background: isHit ? "#1a2f1e" : "#161c2e", borderRadius: 12, padding: 14, marginBottom: 10, border: isHit ? "1.5px solid #6cbc5e" : "1px solid #2a3550", transition: "all 0.15s" }}>
@@ -789,6 +997,7 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
           買い目 {index + 1}
           {isHit && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600 }}>✓ {hitCount}点的中</span>}
         </div>
+        {entryAnalysis.best && <AnalysisBadge label={entryAnalysis.best.label} />}
         {!isOnly && <button onClick={onDelete} style={{ background: "none", border: "none", color: "#e05555", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>}
       </div>
 
@@ -815,9 +1024,9 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
 
       {/* 組み合わせリスト：チェック+金額+オッズ */}
       {entry.mode === "manual"
-        ? <ManualHitChecker entry={entry} onChange={onChange} oddsMode={oddsMode} />
+        ? <ManualHitChecker entry={entry} onChange={onChange} analysisPerCombo={entryAnalysis.perCombo} resultDriven={resultDriven} />
         : result.combinations.length > 0 && (
-          <CombinationsList entry={entry} combinations={result.combinations} onChange={onChange} oddsMode={oddsMode} />
+          <CombinationsList entry={entry} combinations={result.combinations} onChange={onChange} analysisPerCombo={entryAnalysis.perCombo} resultDriven={resultDriven} />
         )
       }
 
@@ -848,6 +1057,166 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
           <span style={{ color: "#e05555", fontSize: 12 }}>買い目を設定してください</span>
         )}
       </div>
+    </div>
+  );
+}
+
+function ResultInput({ result, betType, onChange, entries }) {
+  const cfg = BET_TYPE_CONFIG[betType];
+  const slots = betType === "ワイド" ? 3 : Math.min(cfg.slots === 1 ? (betType === "複勝" ? 3 : 1) : cfg.slots, 3);
+  const finishOrder = result.finishOrder || [];
+  const winningCombos = computeWinningCombos(finishOrder, betType);
+  const analysis = analyzeRecordEntries(entries, betType, finishOrder);
+  const setPlace = (idx, value) => {
+    const next = [...finishOrder];
+    const n = Number(value);
+    if (n > 0) next[idx] = n; else next[idx] = "";
+    onChange({ ...result, finishOrder: next });
+  };
+  const clear = () => onChange({ finishOrder: [], memo: "" });
+  const labels = ["1着", "2着", "3着"].slice(0, slots);
+
+  return (
+    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <Label>レース結果</Label>
+        {analysis && <AnalysisBadge label={analysis.label} />}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${labels.length},1fr)`, gap: 8, marginBottom: 10 }}>
+        {labels.map((label, idx) => (
+          <div key={label}>
+            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>{label}</div>
+            <input type="number" min="1" max={cfg.max} inputMode="numeric" value={finishOrder[idx] || ""} onChange={e => setPlace(idx, e.target.value)}
+              placeholder="馬番" style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontWeight: 800 }} />
+          </div>
+        ))}
+      </div>
+      <textarea value={result.memo || ""} onChange={e => onChange({ ...result, memo: e.target.value })} placeholder="結果メモ（例：軸は来たが相手抜け）"
+        style={{ ...inputStyle, minHeight: 68, resize: "vertical", marginBottom: 10 }} />
+      {winningCombos.length > 0 && (
+        <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: "#6b7a99", marginBottom: 4, fontWeight: 700 }}>実際の的中組み合わせ</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ color: "#e8c86a", fontFamily: "monospace", fontSize: 16, fontWeight: 900, letterSpacing: 1, wordBreak: "break-word" }}>{winningCombos.join(" / ")}</div>
+            {analysis && <AnalysisBadge label={analysis.label} />}
+          </div>
+          {analysis?.reason && <div style={{ color: "#8899bb", fontSize: 11, marginTop: 5 }}>{analysis.reason}</div>}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={clear} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid #5a2a2a", background: "#2a1616", color: "#e05555", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>結果をクリア</button>
+        <div style={{ flex: 2, color: "#6b7a99", fontSize: 11, lineHeight: 1.5 }}>入力すると買い目の的中チェックと判定ラベルが自動更新されます</div>
+      </div>
+    </div>
+  );
+}
+
+function ResultOddsInput({ entries, betType, oddsMode, onChangeEntry }) {
+  const rows = entries.flatMap((entry, entryIndex) => {
+    const combos = computeEntry(entry, betType).combinations;
+    return (entry.hitCombos || [])
+      .filter(combo => combos.includes(combo))
+      .map(combo => ({
+        entry,
+        entryIndex,
+        combo,
+        amount: entry.amountMap?.[combo] ?? entry.unitAmount,
+        odds: entry.oddsMap?.[combo] || 0,
+      }));
+  });
+
+  if (rows.length === 0) return null;
+
+  const setOdds = (entry, combo, mult) => {
+    const map = { ...(entry.oddsMap || {}) };
+    if (mult > 0) map[combo] = mult;
+    else delete map[combo];
+    onChangeEntry(entry.id, { ...entry, oddsMap: map });
+  };
+
+  return (
+    <div style={{ background: "#141f14", borderRadius: 14, padding: 18, marginBottom: 14, border: "1.5px solid #2f5a35" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, color: "#6cbc5e", fontWeight: 800 }}>払戻オッズ</div>
+          <div style={{ fontSize: 11, color: "#7da37d", marginTop: 2 }}>的中した組み合わせだけ入力</div>
+        </div>
+        <AnalysisBadge label="的中" />
+      </div>
+      {rows.map(({ entry, entryIndex, combo, amount, odds }) => (
+        <div key={`${entry.id}-${combo}`} style={{ background: "#0f1420", border: "1px solid #2a3a2a", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "#7da37d", fontWeight: 700 }}>買い目 {entryIndex + 1}</div>
+              <div style={{ fontFamily: "monospace", fontSize: 15, color: "#6cbc5e", fontWeight: 900, letterSpacing: 1 }}>{combo}</div>
+            </div>
+            {odds > 0 && (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 10, color: "#7da37d" }}>払戻</div>
+                <div style={{ fontSize: 13, color: "#6cbc5e", fontFamily: "monospace", fontWeight: 900 }}>{formatYen(Math.floor((amount * odds) / 10) * 10)}</div>
+              </div>
+            )}
+          </div>
+          <OddsStepper value={odds} onChange={mult => setOdds(entry, combo, mult)} oddsMode={oddsMode} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PurchaseMemoSection({ review, onChange }) {
+  const set = (key, value) => onChange({ ...review, [key]: value });
+  return (
+    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <Label>購入メモ</Label>
+        <span style={{ color: "#6b7a99", fontSize: 10, fontWeight: 700 }}>任意</span>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 6 }}>購入理由</div>
+        <OptionChips options={PURCHASE_REASONS} value={review.purchaseReason || ""} onChange={v => set("purchaseReason", v)} color="#88c0ff" />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 6 }}>自信度</div>
+        <OptionChips options={CONFIDENCE_OPTIONS} value={review.confidence || ""} onChange={v => set("confidence", v)} />
+      </div>
+      <details>
+        <summary style={{ color: "#8899bb", fontSize: 12, fontWeight: 800, cursor: "pointer", marginBottom: 10 }}>詳細を入力</summary>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "10px 0 12px" }}>
+          <div>
+            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>軸馬人気</div>
+            <input type="number" min="1" inputMode="numeric" value={review.axisPopularity || ""} onChange={e => set("axisPopularity", e.target.value)}
+              placeholder="例：3" style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>軸馬オッズ</div>
+            <input type="number" min="0" step="0.1" inputMode="decimal" value={review.axisOdds || ""} onChange={e => set("axisOdds", e.target.value)}
+              placeholder="例：5.8" style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }} />
+          </div>
+        </div>
+        <textarea value={review.expectationMemo || ""} onChange={e => set("expectationMemo", e.target.value)}
+          placeholder="購入前の期待値メモ" style={{ ...inputStyle, minHeight: 64, resize: "vertical", marginBottom: 0 }} />
+      </details>
+    </div>
+  );
+}
+
+function ReviewMemoSection({ review, isHit, onChange }) {
+  const set = (key, value) => onChange({ ...review, [key]: value });
+  return (
+    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <Label>振り返り</Label>
+        <span style={{ color: "#6b7a99", fontSize: 10, fontWeight: 700 }}>任意</span>
+      </div>
+      {!isHit && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 6 }}>外れ方</div>
+          <OptionChips options={MISS_REASONS} value={review.missReason || ""} onChange={v => set("missReason", v)} color="#e8a838" />
+        </div>
+      )}
+      <textarea value={review.reflectionMemo || ""} onChange={e => set("reflectionMemo", e.target.value)}
+        placeholder="レース後の反省" style={{ ...inputStyle, minHeight: 72, resize: "vertical", marginBottom: 0 }} />
     </div>
   );
 }
@@ -898,6 +1267,30 @@ function TagStatsList({ records, emptyMsg }) {
   ));
 }
 
+function ReviewStatsList({ records, field, options, emptyMsg }) {
+  const list = options.map(option => {
+    const recs = records.filter(r => r.review?.[field] === option);
+    const inv = recs.reduce((s, r) => s + r.investment, 0);
+    const pay = recs.reduce((s, r) => s + r.payout, 0);
+    return { option, recs, inv, pay, pnl: pay - inv, hits: recs.filter(r => r.isHit).length };
+  }).filter(x => x.recs.length > 0);
+  if (list.length === 0) return <div style={{ color: "#445", textAlign: "center", padding: "20px 0", fontSize: 12 }}>{emptyMsg}</div>;
+  return list.map(({ option, recs, inv, pay, pnl, hits }) => (
+    <div key={option} style={{ padding: "10px 0", borderBottom: "1px solid #1e2a40" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 12, color: "#b8d0ff", fontWeight: 800 }}>{option}</span>
+        <PnLText value={pnl} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4, fontSize: 11 }}>
+        <StatMini label="件数" value={recs.length + "R"} small />
+        <StatMini label="的中率" value={recs.length > 0 ? ((hits / recs.length) * 100).toFixed(0) + "%" : "-"} color="#e8c86a" small />
+        <StatMini label="回収率" value={inv > 0 ? ((pay / inv) * 100).toFixed(0) + "%" : "-"} color="#e8c86a" small />
+        <StatMini label="投資" value={formatYen(inv)} small />
+      </div>
+    </div>
+  ));
+}
+
 // ── Google Sheets 同期セクション ─────────────
 function GoogleSyncSection({ records, onImport, showToast }) {
   const [synced, setSynced] = useState(!!getToken());
@@ -911,7 +1304,7 @@ function GoogleSyncSection({ records, onImport, showToast }) {
   };
 
   useEffect(() => {
-    refreshMeta();
+    void Promise.resolve().then(refreshMeta);
   }, []);
 
   const login = useGoogleLogin({
@@ -1035,7 +1428,7 @@ function DataManagerModal({ records, onClose, onImport }) {
               <div style={{ fontSize: 16, fontWeight: 800, color: "#e8c86a" }}>データ管理</div>
               <button onClick={onClose} style={{ background: "none", border: "none", color: "#6b7a99", fontSize: 20, cursor: "pointer" }}>✕</button>
             </div>
-	　　<GoogleSyncSection records={records} onImport={onImport} showToast={alert} />	
+            <GoogleSyncSection records={records} onImport={onImport} showToast={alert} />
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 11, color: "#6b7a99", fontWeight: 700, marginBottom: 10, letterSpacing: 0.5 }}>エクスポート</div>
               <button onClick={exportCSV} disabled={records.length === 0} style={{ width: "100%", padding: "12px", borderRadius: 8, border: "1.5px solid #3a4f7a", background: "#1e2a40", color: "#b8d0ff", fontSize: 13, fontWeight: 700, marginBottom: 8, cursor: records.length > 0 ? "pointer" : "not-allowed", opacity: records.length > 0 ? 1 : 0.5, textAlign: "left" }}>📊 CSV としてダウンロード</button>
@@ -1077,7 +1470,7 @@ function DataManagerModal({ records, onClose, onImport }) {
 export default function App() {
   const [tab, setTab] = useState("input");
   const [form, setForm] = useState(initialForm);
-  const [records, setRecords] = useState([]);
+  const [records, setRecords] = useState(loadLocalRecords);
   const [filterYear, setFilterYear] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
   const [viewMode, setViewMode] = useState("list");
@@ -1086,11 +1479,14 @@ export default function App() {
   const [dataManagerOpen, setDataManagerOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [historySort, setHistorySort] = useState({ key: "date", dir: "desc" });
+  const showToast = useCallback((msg, color = "#6cbc5e") => {
+    setToast({ msg, color });
+    setTimeout(() => setToast(null), 2400);
+  }, []);
 
   useEffect(() => {
-    let local = [];
-    try { const v = localStorage.getItem("keiba-records-v3"); if (v) local = JSON.parse(v); } catch {}
-    setRecords(local);
+    const local = loadLocalRecords();
 
     // トークン期限切れなら再ログイン促しトーストを表示（3秒後）
     if (isTokenExpired()) {
@@ -1111,22 +1507,26 @@ export default function App() {
         if (!added) return;
         const merged = [...map.values()].sort((a, b) => b.id - a.id);
         setRecords(merged);
-        try { localStorage.setItem("keiba-records-v3", JSON.stringify(merged)); } catch {}
+        persistLocalRecords(merged);
         setToast({ msg: `☁ ${added}件をクラウドから同期しました`, color: "#6cbc5e" });
         setTimeout(() => setToast(null), 2400);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Initial cloud sync is best-effort; manual sync remains available.
+      });
   }, []);
 
   const saveRecords = useCallback(async (next) => {
     setRecords(next);
-    try { localStorage.setItem("keiba-records-v3", JSON.stringify(next)); } catch {}
+    persistLocalRecords(next);
   }, []);
 
   const syncToCloud = useCallback(async (next) => {
     if (!getToken()) return;
     try { await uploadRecords(next); }
-    catch { /* ネットワークエラーは無視、手動同期で対応可 */ }
+    catch {
+      // ネットワークエラーは無視、手動同期で対応可
+    }
   }, []);
 
   const restoreFormFromRecord = useCallback((r, clearHits = false) => {
@@ -1140,9 +1540,13 @@ export default function App() {
     return {
       ...initialForm,
       date: r.date, venueType: r.venueType || "JRA", venue: r.venue || "",
-      raceNo: r.raceNo || "", grade: r.grade || "一般", raceName: r.raceName || "",
+      raceNo: r.raceNo || "", grade: r.grade || "平場", raceName: r.raceName || "",
       betType: r.betType || "三連単",
       oddsMode: form.oddsMode,
+      result: clearHits ? { finishOrder: [], memo: "" } : (r.result || { finishOrder: [], memo: "" }),
+      review: clearHits
+        ? { ...initialForm.review, purchaseReason: r.review?.purchaseReason || "", confidence: r.review?.confidence || "", axisPopularity: r.review?.axisPopularity || "", axisOdds: r.review?.axisOdds || "", expectationMemo: r.review?.expectationMemo || "" }
+        : { ...initialForm.review, ...(r.review || {}) },
       entries,
     };
   }, [form.oddsMode]);
@@ -1152,23 +1556,30 @@ export default function App() {
     setEditingId(null);
     setTab("input");
     showToast("コピーしました。内容を確認して記録してください", "#e8c86a");
-  }, [restoreFormFromRecord]);
+  }, [restoreFormFromRecord, showToast]);
 
   const handleEdit = useCallback((r) => {
     setForm(restoreFormFromRecord(r, false));
     setEditingId(r.id);
     setTab("input");
     showToast("編集モード：保存すると上書きされます", "#5b7fbf");
-  }, [restoreFormFromRecord]);
-
-  const showToast = (msg, color = "#6cbc5e") => { setToast({ msg, color }); setTimeout(() => setToast(null), 2400); };
+  }, [restoreFormFromRecord, showToast]);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const handleVenueTypeChange = (vt) => setForm(f => ({ ...f, venueType: vt, venue: "", grade: "一般", raceName: "" }));
+  const handleVenueTypeChange = (vt) => setForm(f => ({ ...f, venueType: vt, venue: "", grade: "平場", raceName: "" }));
   const handleGradeChange = (g) => setForm(f => ({ ...f, grade: g, raceName: "" }));
-  const handleBetTypeChange = (t) => setForm(f => ({ ...f, betType: t, entries: [newEntry("manual")] }));
-  const updateEntry = (id, next) => setForm(f => ({ ...f, entries: f.entries.map(e => e.id === id ? next : e) }));
-  const addEntry = () => setForm(f => ({ ...f, entries: [...f.entries, newEntry("manual")] }));
+  const handleBetTypeChange = (t) => setForm(f => ({ ...f, betType: t, entries: autoMarkHits([newEntry("manual")], t, f.result?.finishOrder || []) }));
+  const updateEntry = (id, next) => setForm(f => {
+    const entries = f.entries.map(e => e.id === id ? next : e);
+    return { ...f, entries: autoMarkHits(entries, f.betType, f.result?.finishOrder || []) };
+  });
+  const addEntry = () => setForm(f => ({ ...f, entries: autoMarkHits([...f.entries, newEntry("manual")], f.betType, f.result?.finishOrder || []) }));
   const deleteEntry = (id) => setForm(f => ({ ...f, entries: f.entries.filter(e => e.id !== id) }));
+  const handleResultChange = (result) => setForm(f => {
+    const finishOrder = (result.finishOrder || []).map(n => Number(n) || "").filter((n, i, arr) => n || i < arr.length - 1);
+    const cleanResult = { ...result, finishOrder };
+    return { ...f, result: cleanResult, entries: autoMarkHits(f.entries, f.betType, finishOrder, true) };
+  });
+  const handleReviewChange = (review) => setForm(f => ({ ...f, review }));
 
   const totalPoints = form.entries.reduce((s, e) => s + computeEntry(e, form.betType).combinations.length, 0);
   const totalInvestment = form.entries.reduce((s, e) => s + entryInvestment(e, form.betType), 0);
@@ -1196,6 +1607,7 @@ export default function App() {
     if (anyHit && missingOddsCount > 0) return showToast(`的中組み合わせのオッズ${missingOddsCount}点が未入力です`, "#e05555");
 
     const allTags = [...new Set(form.entries.flatMap(e => e.tags || []))];
+    const recordAnalysis = analyzeRecordEntries(form.entries, form.betType, form.result?.finishOrder || []);
 
     const combinationText = form.entries.map((e, i) => {
       const r = computeEntry(e, form.betType);
@@ -1231,7 +1643,7 @@ export default function App() {
     const repOdds = allHitOdds.length > 0 ? Math.max(...allHitOdds) : 0;
 
     const record = {
-      id: editingId || Date.now(),
+      id: editingId || makeRecordId(),
       date: form.date, venueType: form.venueType, venue: form.venue, raceNo: form.raceNo,
       grade: form.grade, raceName: form.raceName,
       betType: form.betType, combination: combinationText,
@@ -1240,10 +1652,14 @@ export default function App() {
       entries: form.entries.map(e => {
         const r = computeEntry(e, form.betType);
         const validHits = (e.hitCombos || []).filter(c => r.combinations.includes(c));
-        return { mode: e.mode, summary: r.summary, count: r.combinations.length, tags: e.tags || [], hitCount: validHits.length };
+        const analysis = analyzeEntry(e, form.betType, form.result?.finishOrder || []).best;
+        return { mode: e.mode, summary: r.summary, count: r.combinations.length, tags: e.tags || [], hitCount: validHits.length, analysis };
       }),
       points: totalPoints, unitAmount: form.entries[0]?.unitAmount || 100,
       odds: repOdds, isHit: anyHit,
+      result: form.result || { finishOrder: [], memo: "" },
+      review: form.review || initialForm.review,
+      analysis: recordAnalysis,
       investment: totalInvestment, payout: totalPayout, pnl: totalPnl,
     };
 
@@ -1262,6 +1678,8 @@ export default function App() {
         ...initialForm,
         date: f.date, venueType: f.venueType, venue: f.venue,
         oddsMode: f.oddsMode, betType: f.betType,
+        result: { finishOrder: [], memo: "" },
+        review: { ...initialForm.review },
       }));
       showToast(anyHit ? `的中！ ${totalPnl >= 0 ? "+" : ""}${formatYen(totalPnl)}` : `外れ … −${formatYen(totalInvestment)}`, anyHit ? "#6cbc5e" : "#e05555");
     }
@@ -1285,6 +1703,19 @@ export default function App() {
   const tPnl = tPay - tInv;
   const hitCount = filtered.filter(r => r.isHit).length;
   const hitRate = filtered.length > 0 ? ((hitCount / filtered.length) * 100).toFixed(1) : "-";
+  const returnRate = tInv > 0 ? ((tPay / tInv) * 100).toFixed(1) : "-";
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const dir = historySort.dir === "asc" ? 1 : -1;
+    const value = (r) => {
+      if (historySort.key === "roi") return recordRoi(r);
+      if (historySort.key === "pnl") return r.pnl;
+      return new Date(r.date).getTime() || Number(r.id) || 0;
+    };
+    const diff = value(a) - value(b);
+    if (diff !== 0) return diff * dir;
+    return ((Number(a.id) || 0) - (Number(b.id) || 0)) * dir;
+  });
+  const setSortKey = (key) => setHistorySort(s => key === s.key ? { ...s, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "date" ? "desc" : "asc" });
 
   const groupBy = (arr, fn) => { const m = {}; arr.forEach(r => { const k = fn(r); if (!m[k]) m[k] = []; m[k].push(r); }); return Object.entries(m).sort(([a], [b]) => b.localeCompare(a)); };
   const dailyGroups = groupBy(filtered, r => r.date);
@@ -1359,23 +1790,18 @@ export default function App() {
                 <button key={g} onClick={() => handleGradeChange(g)}
                   style={{ flex: "1 1 60px", padding: "7px 6px", borderRadius: 7, border: "1.5px solid",
                     fontSize: g.length > 3 ? 11 : 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap",
-                    background: form.grade === g ? (g === "一般" ? "#2a3a55" : GRADE_COLORS[g]) : "#1e2a40",
-                    color: form.grade === g ? (g === "一般" ? "#b8d0ff" : "#1a1a2e") : "#778899",
-                    borderColor: form.grade === g ? (g === "一般" ? "#5b7fbf" : GRADE_COLORS[g]) : "#2a3550",
+                    background: form.grade === g ? (GRADE_COLORS[g] || "#2a3a55") : "#1e2a40",
+                    color: form.grade === g ? (GRADE_COLORS[g] ? "#1a1a2e" : "#b8d0ff") : "#778899",
+                    borderColor: form.grade === g ? (GRADE_COLORS[g] || "#5b7fbf") : "#2a3550",
                   }}>{g}</button>
               ))}
             </div>
 
-            <Label>レース名{form.grade !== "一般" ? `（${form.grade} レース）` : "（任意）"}</Label>
-            {form.grade === "一般" ? (
-              <input type="text" value={form.raceName} onChange={e => setF("raceName", e.target.value)} placeholder="例：第5回中山11R" style={{ ...inputStyle, marginBottom: 0 }} />
-            ) : (
-              <select value={form.raceName} onChange={e => setF("raceName", e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
-                <option value="">── {form.grade} レースを選択 ──</option>
-                {GRADED_RACES[form.grade]?.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            )}
+            <Label>レース名{!["一般", "平場"].includes(form.grade) ? `（${form.grade} レース）` : "（任意）"}</Label>
+            <SearchableRaceNameInput value={form.raceName} onChange={v => setF("raceName", v)} grade={form.grade} />
           </div>
+
+          <PurchaseMemoSection review={form.review || initialForm.review} onChange={handleReviewChange} />
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <Label>券種</Label>
@@ -1417,12 +1843,22 @@ export default function App() {
                 onChange={next => updateEntry(e.id, next)} onDelete={() => deleteEntry(e.id)}
                 isOnly={form.entries.length === 1}
                 allHistoryTags={allHistoryTags}
-                oddsMode={form.oddsMode} />
+                finishOrder={form.result?.finishOrder || []} />
             ))}
             <button onClick={addEntry} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px dashed #3a4f7a", background: "rgba(58,79,122,0.1)", color: "#8899bb", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
               ＋ 買い目を追加
             </button>
           </div>
+
+          {totalPoints > 0 && (
+            <>
+              <ResultInput result={form.result || { finishOrder: [], memo: "" }} betType={form.betType} entries={form.entries} onChange={handleResultChange} />
+              <ResultOddsInput entries={form.entries} betType={form.betType} oddsMode={form.oddsMode} onChangeEntry={updateEntry} />
+              {computeWinningCombos(form.result?.finishOrder || [], form.betType).length > 0 && (
+                <ReviewMemoSection review={form.review || initialForm.review} isHit={anyHit} onChange={handleReviewChange} />
+              )}
+            </>
+          )}
 
           {/* プレビュー */}
           {totalPoints > 0 && (
@@ -1445,7 +1881,7 @@ export default function App() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#88c0ff" }}>編集モード</div>
                 <div style={{ fontSize: 11, color: "#6b7a99" }}>保存すると元の記録が上書きされます</div>
               </div>
-              <button onClick={() => { setEditingId(null); setForm(f => ({ ...initialForm, date: f.date, venueType: f.venueType, venue: f.venue, oddsMode: f.oddsMode, betType: f.betType })); }}
+              <button onClick={() => { setEditingId(null); setForm(f => ({ ...initialForm, date: f.date, venueType: f.venueType, venue: f.venue, oddsMode: f.oddsMode, betType: f.betType, result: { finishOrder: [], memo: "" }, review: { ...initialForm.review } })); }}
                 style={{ background: "none", border: "1px solid #3a4f7a", color: "#6b7a99", fontSize: 11, padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>キャンセル</button>
             </div>
           )}
@@ -1489,14 +1925,31 @@ export default function App() {
             </div>
           )}
           {(viewMode === "list" || viewMode === "daily") && filtered.length > 0 && (
-            <div style={{ background: "#161c2e", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: "1px solid #2a3550", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
+            <div style={{ background: "#161c2e", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: "1px solid #2a3550", display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4 }}>
               <StatMini label="投資" value={formatYen(tInv)} small />
               <StatMini label="払戻" value={formatYen(tPay)} color="#6cbc5e" small />
               <StatMini label="収支" value={(tPnl >= 0 ? "+" : "") + formatYen(tPnl)} color={tPnl >= 0 ? "#6cbc5e" : "#e05555"} small />
+              <StatMini label="回収率" value={returnRate === "-" ? "-" : returnRate + "%"} color="#e8c86a" small />
               <StatMini label="的中率" value={hitRate + "%"} color="#e8c86a" small />
             </div>
           )}
-          {viewMode === "list" && (filtered.length === 0 ? <EmptyState /> : filtered.map(r => <RecordCard key={r.id} record={r} onDelete={() => setDeleteTarget(r.id)} onEdit={() => handleEdit(r)} onCopy={() => handleCopy(r)} />))}
+          {viewMode === "list" && filtered.length > 0 && (
+            <div style={{ background: "#161c2e", borderRadius: 12, padding: 10, marginBottom: 14, border: "1px solid #2a3550" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
+                {[{ key: "date", label: "日付" }, { key: "roi", label: "回収率" }, { key: "pnl", label: "収支" }].map(item => (
+                  <button key={item.key} onClick={() => setSortKey(item.key)}
+                    style={{ padding: "8px 4px", borderRadius: 8, border: "1.5px solid", cursor: "pointer", fontSize: 12, fontWeight: 800,
+                      background: historySort.key === item.key ? "#e8c86a" : "#1e2a40",
+                      color: historySort.key === item.key ? "#0d1117" : "#8899bb",
+                      borderColor: historySort.key === item.key ? "#e8c86a" : "#2a3550",
+                    }}>
+                    {item.label} {historySort.key === item.key ? (historySort.dir === "asc" ? "↑" : "↓") : ""}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {viewMode === "list" && (filtered.length === 0 ? <EmptyState /> : sortedFiltered.map(r => <RecordCard key={r.id} record={r} onDelete={() => setDeleteTarget(r.id)} onEdit={() => handleEdit(r)} onCopy={() => handleCopy(r)} />))}
           {viewMode === "daily" && (dailyGroups.length === 0 ? <EmptyState /> : dailyGroups.map(([d, recs]) => <SummaryCard key={d} title={d.replace(/-/g, "/")} subtitle={`(${dayOfWeek(d)}曜日)`} records={recs} />))}
           {viewMode === "monthly" && (monthlyGroups.length === 0 ? <EmptyState /> : monthlyGroups.map(([ym, recs]) => { const [y, m] = ym.split("-"); return <SummaryCard key={ym} title={`${y}年 ${Number(m)}月`} records={recs} />; }))}
           {viewMode === "yearly" && (yearlyGroups.length === 0 ? <EmptyState /> : yearlyGroups.map(([y, recs]) => <SummaryCard key={y} title={`${y}年`} records={recs} />))}
@@ -1574,15 +2027,30 @@ export default function App() {
           </div>
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>購入理由別成績</div>
+            <ReviewStatsList records={records} field="purchaseReason" options={PURCHASE_REASONS} emptyMsg="購入理由が入力された記録がありません" />
+          </div>
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>自信度別成績</div>
+            <ReviewStatsList records={records} field="confidence" options={CONFIDENCE_OPTIONS} emptyMsg="自信度が入力された記録がありません" />
+          </div>
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>外れ方別成績</div>
+            <ReviewStatsList records={records.filter(r => !r.isHit)} field="missReason" options={MISS_REASONS} emptyMsg="外れ方が入力された記録がありません" />
+          </div>
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>グレード別成績</div>
-            {["G1", "G2", "G3", "Jpn1", "Jpn2", "Jpn3", "地方重賞", "一般"].filter(g => records.some(r => (r.grade || "一般") === g)).length === 0
+            {["G1", "G2", "G3", "Jpn1", "Jpn2", "Jpn3", "地方重賞", "OP", "平場", "一般"].filter(g => records.some(r => (r.grade || "平場") === g)).length === 0
               ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
-              : ["G1", "G2", "G3", "Jpn1", "Jpn2", "Jpn3", "地方重賞", "一般"].filter(g => records.some(r => (r.grade || "一般") === g)).map(g => {
-                const grp = records.filter(r => (r.grade || "一般") === g); const pnl = grp.reduce((s, r) => s + r.pnl, 0);
+              : ["G1", "G2", "G3", "Jpn1", "Jpn2", "Jpn3", "地方重賞", "OP", "平場", "一般"].filter(g => records.some(r => (r.grade || "平場") === g)).map(g => {
+                const grp = records.filter(r => (r.grade || "平場") === g); const pnl = grp.reduce((s, r) => s + r.pnl, 0);
                 return (
                   <div key={g} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1e2a40" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      {g !== "一般" ? <GradeBadge grade={g} /> : <span style={{ fontSize: 12, color: "#778", fontWeight: 600 }}>一般</span>}
+                      {!["一般", "平場", "OP"].includes(g) ? <GradeBadge grade={g} /> : <span style={{ fontSize: 12, color: "#778", fontWeight: 600 }}>{g}</span>}
                       <span style={{ fontSize: 11, color: "#6b7a99" }}>{grp.length}R / {grp.filter(r => r.isHit).length}的中</span>
                     </div>
                     <PnLText value={pnl} />
@@ -1615,6 +2083,9 @@ export default function App() {
 function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
   const raceLabel = [r.venue, r.raceNo ? `${r.raceNo}R` : "", r.raceName].filter(Boolean).join("  ");
   const totalHitCount = (r.entries || []).reduce((s, e) => s + (e.hitCount || 0), 0);
+  const analysis = r.analysis || analyzeRecordEntries(r.formEntries || [], r.betType, r.result?.finishOrder || []);
+  const winningCombos = computeWinningCombos(r.result?.finishOrder || [], r.betType);
+  const roi = r.investment > 0 ? recordRoi(r).toFixed(0) + "%" : "-";
   const iconBtn = { background: "none", border: "none", color: "#445", cursor: "pointer", fontSize: 16, padding: "0 4px", flexShrink: 0 };
   return (
     <div style={{ background: r.isHit ? "#141f14" : "#161c2e", borderRadius: 12, padding: 14, marginBottom: 10, border: `1.5px solid ${r.isHit ? "#3a5a3a" : "#2a3550"}` }}>
@@ -1622,13 +2093,17 @@ function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 5 }}>
             <BetTypeBadge type={r.betType} />
-            {r.grade && r.grade !== "一般" && <GradeBadge grade={r.grade} />}
+            {r.grade && !["一般", "平場"].includes(r.grade) && <GradeBadge grade={r.grade} />}
+            {r.review?.purchaseReason && <span style={{ fontSize: 10, background: "#1d3146", color: "#88c0ff", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>{r.review.purchaseReason}</span>}
+            {r.review?.confidence && <span style={{ fontSize: 10, background: "#3a3320", color: "#e8c86a", padding: "1px 6px", borderRadius: 4, fontWeight: 800 }}>自信{r.review.confidence}</span>}
+            {r.review?.missReason && !r.isHit && <span style={{ fontSize: 10, background: "#3a1a1a", color: "#e8a838", padding: "1px 6px", borderRadius: 4, fontWeight: 800 }}>{r.review.missReason}</span>}
             {r.venueType === "地方" && <span style={{ fontSize: 10, background: "#2a3550", color: "#8899bb", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>地方</span>}
             {r.isHit && (
               <span style={{ background: "#1a4a1a", border: "1.5px solid #6cbc5e", color: "#6cbc5e", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>
                 ✓ 的中 {totalHitCount > 0 ? `${totalHitCount}点` : ""}
               </span>
             )}
+            {analysis && !r.isHit && <AnalysisBadge label={analysis.label} />}
           </div>
           <div style={{ fontSize: 11, color: "#6b7a99" }}>{r.date}（{dayOfWeek(r.date)}）</div>
           {raceLabel && <div style={{ fontSize: 12, color: "#aab8cc", fontWeight: 600, marginTop: 2 }}>{raceLabel}</div>}
@@ -1654,7 +2129,31 @@ function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
         </details>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
+      {winningCombos.length > 0 && (
+        <div style={{ background: "#0f1420", borderRadius: 8, padding: "8px 10px", marginBottom: 8, border: "1px solid #1e2a40" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700 }}>レース結果</span>
+            {analysis && <AnalysisBadge label={analysis.label} />}
+          </div>
+          <div style={{ fontFamily: "monospace", color: "#e8c86a", fontSize: 13, fontWeight: 900, letterSpacing: 1, wordBreak: "break-word" }}>{winningCombos.join(" / ")}</div>
+          {analysis?.reason && <div style={{ color: "#8899bb", fontSize: 11, marginTop: 4 }}>{analysis.reason}</div>}
+          {r.result?.memo && <div style={{ color: "#aab8cc", fontSize: 11, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.result.memo}</div>}
+        </div>
+      )}
+
+      {(r.review?.expectationMemo || r.review?.reflectionMemo || r.review?.axisPopularity || r.review?.axisOdds) && (
+        <details style={{ background: "#0f1420", borderRadius: 8, padding: "8px 10px", marginBottom: 8, border: "1px solid #1e2a40" }}>
+          <summary style={{ fontSize: 10, color: "#6b7a99", fontWeight: 600, cursor: "pointer", outline: "none" }}>購入・反省メモ</summary>
+          <div style={{ color: "#aab8cc", fontSize: 11, marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            {r.review?.axisPopularity && `軸人気: ${r.review.axisPopularity}番人気\n`}
+            {r.review?.axisOdds && `軸オッズ: ${r.review.axisOdds}倍\n`}
+            {r.review?.expectationMemo && `購入前: ${r.review.expectationMemo}\n`}
+            {r.review?.reflectionMemo && `反省: ${r.review.reflectionMemo}`}
+          </div>
+        </details>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6 }}>
         <StatMini label="点数" value={r.points + "点"} small />
         <StatMini label="投資" value={formatYen(r.investment)} small />
         {r.isHit ? (
@@ -1664,6 +2163,7 @@ function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
           <><StatMini label="結果" value="外れ" color="#e05555" small />
           <StatMini label="収支" value={"−" + formatYen(r.investment)} color="#e05555" small /></>
         )}
+        <StatMini label="回収率" value={roi} color={r.payout >= r.investment && r.investment > 0 ? "#6cbc5e" : "#e8c86a"} small />
       </div>
     </div>
   );
