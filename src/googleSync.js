@@ -87,12 +87,6 @@ export async function uploadRecords(records) {
 
   const id = await ensureSpreadsheetId(token);
 
-  // シート全体をクリア
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${SHEET_NAME}:clear`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
   // recordsをJSON文字列にして1セルに保存（シンプルかつ完全復元可）
   const json = JSON.stringify(records);
   // セルサイズ制限のためバージョン情報も付ける

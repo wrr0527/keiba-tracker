@@ -18,6 +18,7 @@ const BET_TYPE_CONFIG = {
   三連複: { sep: "-",  max: 18, slots: 3, ordered: false },
   三連単: { sep: "→",  max: 18, slots: 3, ordered: true  },
 };
+const MODE_LABELS = { manual: "通常", box: "ボックス", wheel: "流し", formation: "フォーメーション", unknown: "不明" };
 
 const ANALYSIS_RANK = { 的中: 5, 順番違い: 4, "1頭違い": 3, 軸のみ: 2, 相手のみ: 1, 完敗: 0 };
 const ANALYSIS_COLORS = {
@@ -104,7 +105,7 @@ const initialForm = {
   date: new Date().toISOString().slice(0, 10),
   venueType: "JRA", venue: "", raceNo: "", grade: "平場", raceName: "",
   betType: "三連単", entries: [newEntry("manual")],
-  oddsMode: "per100",
+  oddsMode: "per100", memo: "",
   result: { finishOrder: [], memo: "" },
   review: {
     purchaseReason: "", confidence: "",
@@ -117,7 +118,7 @@ const keepRaceInfo = (prev) => ({
   ...initialForm,
   date: prev.date, venueType: prev.venueType, venue: prev.venue,
   raceNo: prev.raceNo, grade: prev.grade, raceName: prev.raceName,
-  oddsMode: prev.oddsMode, betType: prev.betType,
+  oddsMode: prev.oddsMode, betType: prev.betType, memo: prev.memo,
   result: { finishOrder: [], memo: "" },
   review: { ...initialForm.review, purchaseReason: prev.review?.purchaseReason || "", confidence: prev.review?.confidence || "" },
 });
@@ -125,9 +126,20 @@ const keepRaceInfo = (prev) => ({
 // ── 組み合わせ生成（変更なし） ─────────────
 function sorted(arr) { return [...arr].sort((a, b) => a - b); }
 
-function computeManual(text) {
-  const lines = (text || "").split("\n").map(s => s.trim()).filter(Boolean);
-  return { combinations: lines, summary: "通常" };
+function normalizeComboText(line, betType) {
+  const cfg = BET_TYPE_CONFIG[betType];
+  const nums = (line.match(/\d+/g) || []).map(Number).filter(n => n >= 1 && n <= cfg.max);
+  if (nums.length !== cfg.slots || new Set(nums).size !== nums.length) return null;
+  return (cfg.ordered ? nums : sorted(nums)).join(cfg.sep);
+}
+
+function computeManual(text, betType) {
+  const result = new Set();
+  (text || "").split("\n").map(s => s.trim()).filter(Boolean).forEach(line => {
+    const combo = normalizeComboText(line, betType);
+    if (combo) result.add(combo);
+  });
+  return { combinations: [...result], summary: "通常" };
 }
 function computeBox(horses, betType) {
   const { slots, ordered, sep } = BET_TYPE_CONFIG[betType];
@@ -205,7 +217,7 @@ function computeFormation(columns, betType) {
   return { combinations: [...result], summary: `フォーメーション：${cols.map(c => c.join(",")).join(" / ")}` };
 }
 function computeEntry(entry, betType) {
-  if (entry.mode === "manual") return computeManual(entry.text);
+  if (entry.mode === "manual") return computeManual(entry.text, betType);
   if (entry.mode === "box") return computeBox(entry.horses, betType);
   if (entry.mode === "wheel") return computeWheel(entry.axisHorses, entry.poolHorses, entry.axisPos, betType);
   if (entry.mode === "formation") return computeFormation(entry.columns, betType);
@@ -337,6 +349,172 @@ function entryPayout(entry) {
   }, 0);
 }
 
+function entryStats(entry, betType) {
+  const { combinations, summary } = computeEntry(entry, betType);
+  const hitCombos = (entry.hitCombos || []).filter(c => combinations.includes(c));
+  const investment = combinations.reduce((s, c) => s + (entry.amountMap?.[c] ?? entry.unitAmount), 0);
+  const payout = hitCombos.reduce((sum, c) => {
+    const amt = entry.amountMap?.[c] ?? entry.unitAmount;
+    const odds = entry.oddsMap?.[c] || 0;
+    return odds ? sum + Math.floor((amt * odds) / 10) * 10 : sum;
+  }, 0);
+  return {
+    mode: entry.mode,
+    summary,
+    count: combinations.length,
+    tags: entry.tags || [],
+    hitCount: hitCombos.length,
+    investment,
+    payout,
+    pnl: payout - investment,
+    isHit: hitCombos.length > 0,
+  };
+}
+
+function recordUpdatedAt(record) {
+  return Date.parse(record?.updatedAt || record?.createdAt || record?.date || 0) || 0;
+}
+
+function mergeRecordsPreferLatest(localRecords, remoteRecords) {
+  const map = new Map();
+  [...localRecords, ...remoteRecords].forEach(record => {
+    if (!record || record.id == null) return;
+    const current = map.get(record.id);
+    if (!current || recordUpdatedAt(record) >= recordUpdatedAt(current)) map.set(record.id, record);
+  });
+  return [...map.values()].sort((a, b) => recordUpdatedAt(b) - recordUpdatedAt(a));
+}
+
+function validateRecord(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const date = typeof raw.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.date) ? raw.date : null;
+  if (!date) return null;
+  const id = raw.id ?? `${date}-${raw.raceNo || ""}-${raw.betType || ""}-${raw.combination || ""}`;
+  const investment = Number(raw.investment);
+  const payout = Number(raw.payout);
+  const safeInvestment = Number.isFinite(investment) ? Math.max(0, investment) : 0;
+  const safePayout = Number.isFinite(payout) ? Math.max(0, payout) : 0;
+  return {
+    ...raw,
+    id,
+    date,
+    venueType: raw.venueType === "地方" ? "地方" : "JRA",
+    venue: typeof raw.venue === "string" ? raw.venue : "",
+    raceNo: raw.raceNo || "",
+    grade: typeof raw.grade === "string" ? raw.grade : "一般",
+    raceName: typeof raw.raceName === "string" ? raw.raceName : "",
+    betType: BET_TYPES.includes(raw.betType) ? raw.betType : "三連単",
+    combination: typeof raw.combination === "string" ? raw.combination : "",
+    memo: typeof raw.memo === "string" ? raw.memo : "",
+    tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === "string") : [],
+    formEntries: Array.isArray(raw.formEntries) ? raw.formEntries : undefined,
+    entries: Array.isArray(raw.entries) ? raw.entries : [],
+    points: Number.isFinite(Number(raw.points)) ? Math.max(0, Number(raw.points)) : 0,
+    investment: safeInvestment,
+    payout: safePayout,
+    pnl: Number.isFinite(Number(raw.pnl)) ? Number(raw.pnl) : safePayout - safeInvestment,
+    isHit: Boolean(raw.isHit),
+    createdAt: raw.createdAt || new Date(`${date}T00:00:00`).toISOString(),
+    updatedAt: raw.updatedAt || raw.createdAt || new Date(`${date}T00:00:00`).toISOString(),
+  };
+}
+
+function validateRecords(rawRecords) {
+  if (!Array.isArray(rawRecords)) return [];
+  return rawRecords.map(validateRecord).filter(Boolean);
+}
+
+function createTimestamp() {
+  return new Date().toISOString();
+}
+
+function recordMatchesFilters(record, filters) {
+  if (!record) return false;
+  if (filters.year && filters.year !== "all" && !String(record.date || "").startsWith(filters.year)) return false;
+  if (filters.month && filters.month !== "all" && !String(record.date || "").startsWith(`${filters.year}-${filters.month}`)) return false;
+  if (filters.venueType && filters.venueType !== "all" && record.venueType !== filters.venueType) return false;
+  if (filters.venue && filters.venue !== "all" && record.venue !== filters.venue) return false;
+  if (filters.betType && filters.betType !== "all" && record.betType !== filters.betType) return false;
+  if (filters.grade && filters.grade !== "all" && (record.grade || "一般") !== filters.grade) return false;
+  if (filters.tag && filters.tag !== "all" && !(record.tags || []).includes(filters.tag)) return false;
+  if (filters.result === "hit" && !record.isHit) return false;
+  if (filters.result === "miss" && record.isHit) return false;
+  if (filters.result === "plus" && Number(record.pnl) <= 0) return false;
+  if (filters.result === "minus" && Number(record.pnl) >= 0) return false;
+  if (filters.query) {
+    const q = filters.query.trim().toLowerCase();
+    const haystack = [
+      record.date, record.venueType, record.venue, record.raceNo, record.grade, record.raceName,
+      record.betType, record.combination, record.memo, ...(record.tags || []),
+    ].join(" ").toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+  return true;
+}
+
+function summarizeRecords(records) {
+  const investment = records.reduce((s, r) => s + Number(r.investment || 0), 0);
+  const payout = records.reduce((s, r) => s + Number(r.payout || 0), 0);
+  const hits = records.filter(r => r.isHit).length;
+  return {
+    count: records.length,
+    investment,
+    payout,
+    pnl: payout - investment,
+    hits,
+    roi: investment > 0 ? (payout / investment) * 100 : null,
+    hitRate: records.length > 0 ? (hits / records.length) * 100 : null,
+    avgInvestment: records.length > 0 ? investment / records.length : 0,
+    avgPayout: records.length > 0 ? payout / records.length : 0,
+  };
+}
+
+function groupRecordsBy(records, keyFn) {
+  const map = new Map();
+  records.forEach(record => {
+    const key = keyFn(record) || "未設定";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(record);
+  });
+  return [...map.entries()].map(([key, recs]) => ({ key, ...summarizeRecords(recs) }))
+    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
+}
+
+function entryAmountFallback(record, entry) {
+  if (Number.isFinite(Number(entry?.investment))) {
+    const investment = Number(entry.investment || 0);
+    const payout = Number(entry.payout || 0);
+    return { investment, payout, pnl: Number.isFinite(Number(entry.pnl)) ? Number(entry.pnl) : payout - investment };
+  }
+  if ((record.entries || []).length === 1) {
+    return { investment: Number(record.investment || 0), payout: Number(record.payout || 0), pnl: Number(record.pnl || 0) };
+  }
+  const totalPoints = (record.entries || []).reduce((s, e) => s + Number(e.count || 0), 0) || 1;
+  const ratio = Number(entry?.count || 0) / totalPoints;
+  const investment = Math.round(Number(record.investment || 0) * ratio);
+  const payout = Math.round(Number(record.payout || 0) * ratio);
+  return { investment, payout, pnl: payout - investment };
+}
+
+function summarizeByEntryMode(records) {
+  const map = new Map();
+  records.forEach(record => {
+    (record.entries || []).forEach(entry => {
+      const key = entry.mode || "unknown";
+      const amounts = entryAmountFallback(record, entry);
+      const current = map.get(key) || { key, count: 0, points: 0, hits: 0, investment: 0, payout: 0, pnl: 0 };
+      current.count += 1;
+      current.points += Number(entry.count || 0);
+      current.hits += Number(entry.hitCount || 0);
+      current.investment += amounts.investment;
+      current.payout += amounts.payout;
+      current.pnl += amounts.pnl;
+      map.set(key, current);
+    });
+  });
+  return [...map.values()].sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
+}
+
 // ── ユーティリティ ─────────────
 const formatYen = v => { const n = Number(v); return isNaN(n) ? "¥0" : "¥" + n.toLocaleString("ja-JP"); };
 const dayOfWeek = s => ["日", "月", "火", "水", "木", "金", "土"][new Date(s).getDay()];
@@ -344,14 +522,14 @@ const formatDate = s => { if (!s) return ""; const d = new Date(s); return `${d.
 
 // ── CSV / JSON ─────────────
 function recordsToCSV(records) {
-  const headers = ["日付","競馬場区分","競馬場","R","グレード","レース名","券種","点数","投資額","的中","判定","購入理由","自信度","軸馬人気","軸馬オッズ","外れ方","払戻金","収支","結果","結果メモ","期待値メモ","反省","買い目","タグ"];
+  const headers = ["日付","競馬場区分","競馬場","R","グレード","レース名","券種","点数","投資額","的中","判定","購入理由","自信度","軸馬人気","軸馬オッズ","外れ方","払戻金","収支","結果","結果メモ","期待値メモ","反省","買い目","タグ","メモ"];
   const esc = v => { const s = String(v ?? "").replace(/"/g, '""'); return /[,"\n]/.test(s) ? `"${s}"` : s; };
   const rows = records.map(r => [
     r.date, r.venueType || "", r.venue || "", r.raceNo || "", r.grade || "", r.raceName || "",
     r.betType, r.points, r.investment, r.isHit ? "○" : "×", r.analysis?.label || "",
     r.review?.purchaseReason || "", r.review?.confidence || "", r.review?.axisPopularity || "", r.review?.axisOdds || "", r.review?.missReason || "",
     r.payout, r.pnl, computeWinningCombos(r.result?.finishOrder || [], r.betType).join(" / "), r.result?.memo || "", r.review?.expectationMemo || "", r.review?.reflectionMemo || "", (r.combination || "").replace(/\n/g, " | "),
-    (r.tags || []).join(" | "),
+    (r.tags || []).join(" | "), r.memo || "",
   ]);
   return [headers, ...rows].map(row => row.map(esc).join(",")).join("\n");
 }
@@ -401,6 +579,32 @@ function GradeBadge({ grade }) { if (!grade || ["一般", "平場"].includes(gra
 function StatMini({ label, value, color = "#e4e6eb", small }) { return <div style={{ textAlign: "center" }}><div style={{ fontSize: small ? 10 : 11, color: "#6b7a99", marginBottom: 2 }}>{label}</div><div style={{ fontSize: small ? 11 : 13, fontWeight: 700, color, fontFamily: "monospace" }}>{value}</div></div>; }
 function BigStat({ label, value, color = "#e4e6eb" }) { return <div style={{ background: "#1e2a40", borderRadius: 10, padding: "12px 14px" }}><div style={{ fontSize: 11, color: "#6b7a99", marginBottom: 4 }}>{label}</div><div style={{ fontSize: 16, fontWeight: 800, color, fontFamily: "monospace" }}>{value}</div></div>; }
 function PnLText({ value }) { return <span style={{ color: value === 0 ? "#888" : value > 0 ? "#6cbc5e" : "#e05555", fontWeight: 700, fontFamily: "monospace", fontSize: 14 }}>{value > 0 ? "+" : ""}{formatYen(value)}</span>; }
+function FilterSelect({ value, onChange, options }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} style={{ ...inputStyle, marginBottom: 0, minWidth: 0, fontSize: 12, padding: "9px 10px" }}>
+      {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
+  );
+}
+function DashboardRow({ label, stats, badge }) {
+  return (
+    <div style={{ padding: "10px 0", borderBottom: "1px solid #1e2a40" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+          {badge}
+          <span style={{ fontSize: 13, color: "#e4e6eb", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        </div>
+        <PnLText value={stats.pnl} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4 }}>
+        <StatMini label="件数" value={(stats.count ?? 0) + "件"} small />
+        <StatMini label="投資" value={formatYen(stats.investment || 0)} small />
+        <StatMini label="回収率" value={stats.investment > 0 ? ((stats.payout / stats.investment) * 100).toFixed(0) + "%" : "-"} color="#e8c86a" small />
+        <StatMini label="的中率" value={stats.count > 0 ? ((stats.hits / stats.count) * 100).toFixed(0) + "%" : "-"} color="#e8c86a" small />
+      </div>
+    </div>
+  );
+}
 
 // ── カスタムカレンダー ─────────────
 function CalendarPicker({ value, onChange, onClose }) {
@@ -1243,30 +1447,6 @@ function SummaryCard({ title, subtitle, records }) {
   );
 }
 
-function TagStatsList({ records, emptyMsg }) {
-  const map = new Map();
-  records.forEach(r => { (r.tags || []).forEach(tag => { if (!map.has(tag)) map.set(tag, []); map.get(tag).push(r); }); });
-  const list = [...map.entries()].map(([tag, recs]) => {
-    const inv = recs.reduce((s, r) => s + r.investment, 0); const pay = recs.reduce((s, r) => s + r.payout, 0);
-    return { tag, recs, inv, pay, pnl: pay - inv, hits: recs.filter(r => r.isHit).length };
-  }).sort((a, b) => b.inv - a.inv);
-  if (list.length === 0) return <div style={{ color: "#445", textAlign: "center", padding: "20px 0", fontSize: 12 }}>{emptyMsg}</div>;
-  return list.map(({ tag, recs, inv, pay, pnl, hits }) => (
-    <div key={tag} style={{ padding: "10px 0", borderBottom: "1px solid #1e2a40" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <span style={{ background: "#2a3a55", color: "#b8d0ff", padding: "2px 9px", borderRadius: 10, fontSize: 12, fontWeight: 700 }}>#{tag}</span>
-        <PnLText value={pnl} />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4, fontSize: 11 }}>
-        <StatMini label="件数" value={recs.length + "R"} small />
-        <StatMini label="的中率" value={recs.length > 0 ? ((hits / recs.length) * 100).toFixed(0) + "%" : "-"} color="#e8c86a" small />
-        <StatMini label="投資" value={formatYen(inv)} small />
-        <StatMini label="回収率" value={inv > 0 ? ((pay / inv) * 100).toFixed(0) + "%" : "-"} color="#e8c86a" small />
-      </div>
-    </div>
-  ));
-}
-
 function ReviewStatsList({ records, field, options, emptyMsg }) {
   const list = options.map(option => {
     const recs = records.filter(r => r.review?.[field] === option);
@@ -1304,7 +1484,11 @@ function GoogleSyncSection({ records, onImport, showToast }) {
   };
 
   useEffect(() => {
-    void Promise.resolve().then(refreshMeta);
+    let active = true;
+    if (getToken()) {
+      getRemoteMeta().then(meta => { if (active) setRemoteMeta(meta); });
+    }
+    return () => { active = false; };
   }, []);
 
   const login = useGoogleLogin({
@@ -1330,7 +1514,10 @@ function GoogleSyncSection({ records, onImport, showToast }) {
     if (busy) return;
     setBusy(true);
     try {
-      const r = await uploadRecords(records);
+      const remote = validateRecords(await downloadRecords());
+      const merged = mergeRecordsPreferLatest(records, remote);
+      const r = await uploadRecords(merged);
+      if (remote.length > 0 && merged.length !== records.length) onImport(merged, true);
       showToast(`${r.count}件をアップロードしました`);
       refreshMeta();
     } catch (e) {
@@ -1346,11 +1533,12 @@ function GoogleSyncSection({ records, onImport, showToast }) {
     setBusy(true);
     try {
       const remote = await downloadRecords();
-      if (remote.length === 0) {
+      const safeRemote = validateRecords(remote);
+      if (safeRemote.length === 0) {
         showToast("クラウドに記録がありません", "#888");
       } else {
-        onImport(remote, true);
-        showToast(`${remote.length}件をダウンロードしました`);
+        onImport(safeRemote, true);
+        showToast(`${safeRemote.length}件をダウンロードしました`);
       }
     } catch (e) {
       showToast(e.message || "ダウンロード失敗", "#e05555");
@@ -1414,7 +1602,12 @@ function DataManagerModal({ records, onClose, onImport }) {
     const f = e.target.files?.[0]; if (!f) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      try { const data = JSON.parse(ev.target.result); const recs = data.records || data; if (!Array.isArray(recs)) throw new Error(); setMode({ type: "import-confirm", count: recs.length, records: recs }); }
+      try {
+        const data = JSON.parse(ev.target.result);
+        const recs = validateRecords(data.records || data);
+        if (recs.length === 0) throw new Error();
+        setMode({ type: "import-confirm", count: recs.length, records: recs });
+      }
       catch { alert("ファイルの読み込みに失敗しました"); }
     };
     reader.readAsText(f); e.target.value = "";
@@ -1471,8 +1664,6 @@ export default function App() {
   const [tab, setTab] = useState("input");
   const [form, setForm] = useState(initialForm);
   const [records, setRecords] = useState(loadLocalRecords);
-  const [filterYear, setFilterYear] = useState("all");
-  const [filterMonth, setFilterMonth] = useState("all");
   const [viewMode, setViewMode] = useState("list");
   const [toast, setToast] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -1480,14 +1671,14 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [historySort, setHistorySort] = useState({ key: "date", dir: "desc" });
+  const [historyFilters, setHistoryFilters] = useState({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all" });
+  const [statsFilters, setStatsFilters] = useState({ year: "all", month: "all", venueType: "all", venue: "all", betType: "all", grade: "all", result: "all", tag: "all" });
   const showToast = useCallback((msg, color = "#6cbc5e") => {
     setToast({ msg, color });
     setTimeout(() => setToast(null), 2400);
   }, []);
 
   useEffect(() => {
-    const local = loadLocalRecords();
-
     // トークン期限切れなら再ログイン促しトーストを表示（3秒後）
     if (isTokenExpired()) {
       setTimeout(() => {
@@ -1500,16 +1691,18 @@ export default function App() {
     if (!getToken()) return;
     downloadRecords()
       .then(remote => {
-        if (!remote.length) return;
-        const map = new Map(local.map(r => [r.id, r]));
-        let added = 0;
-        remote.forEach(r => { if (!map.has(r.id)) { map.set(r.id, r); added++; } });
-        if (!added) return;
-        const merged = [...map.values()].sort((a, b) => b.id - a.id);
-        setRecords(merged);
-        persistLocalRecords(merged);
-        setToast({ msg: `☁ ${added}件をクラウドから同期しました`, color: "#6cbc5e" });
-        setTimeout(() => setToast(null), 2400);
+        const safeRemote = validateRecords(remote);
+        if (!safeRemote.length) return;
+        setRecords(current => {
+          const merged = mergeRecordsPreferLatest(current, safeRemote);
+          const changed = JSON.stringify(merged) !== JSON.stringify(current);
+          if (changed) {
+            persistLocalRecords(merged);
+            setToast({ msg: "☁ クラウドから同期しました", color: "#6cbc5e" });
+            setTimeout(() => setToast(null), 2400);
+          }
+          return changed ? merged : current;
+        });
       })
       .catch(() => {
         // Initial cloud sync is best-effort; manual sync remains available.
@@ -1523,10 +1716,16 @@ export default function App() {
 
   const syncToCloud = useCallback(async (next) => {
     if (!getToken()) return;
-    try { await uploadRecords(next); }
-    catch {
-      // ネットワークエラーは無視、手動同期で対応可
+    try {
+      const remote = validateRecords(await downloadRecords());
+      const merged = mergeRecordsPreferLatest(next, remote);
+      await uploadRecords(merged);
+      if (JSON.stringify(merged) !== JSON.stringify(next)) {
+        setRecords(merged);
+        persistLocalRecords(merged);
+      }
     }
+    catch { /* ネットワークエラーは無視、手動同期で対応可 */ }
   }, []);
 
   const restoreFormFromRecord = useCallback((r, clearHits = false) => {
@@ -1543,6 +1742,7 @@ export default function App() {
       raceNo: r.raceNo || "", grade: r.grade || "平場", raceName: r.raceName || "",
       betType: r.betType || "三連単",
       oddsMode: form.oddsMode,
+      memo: r.memo || "",
       result: clearHits ? { finishOrder: [], memo: "" } : (r.result || { finishOrder: [], memo: "" }),
       review: clearHits
         ? { ...initialForm.review, purchaseReason: r.review?.purchaseReason || "", confidence: r.review?.confidence || "", axisPopularity: r.review?.axisPopularity || "", axisOdds: r.review?.axisOdds || "", expectationMemo: r.review?.expectationMemo || "" }
@@ -1641,19 +1841,21 @@ export default function App() {
       return (e.hitCombos || []).filter(c => combos.includes(c)).map(c => e.oddsMap?.[c] || 0);
     }).filter(o => o > 0);
     const repOdds = allHitOdds.length > 0 ? Math.max(...allHitOdds) : 0;
+    const now = createTimestamp();
+    const previous = editingId ? records.find(r => r.id === editingId) : null;
 
     const record = {
-      id: editingId || makeRecordId(),
+      id: editingId || now,
       date: form.date, venueType: form.venueType, venue: form.venue, raceNo: form.raceNo,
       grade: form.grade, raceName: form.raceName,
       betType: form.betType, combination: combinationText,
       tags: allTags,
+      memo: form.memo.trim(),
       formEntries: form.entries, // 編集・コピー用にフォームデータを保存
       entries: form.entries.map(e => {
-        const r = computeEntry(e, form.betType);
-        const validHits = (e.hitCombos || []).filter(c => r.combinations.includes(c));
+        const stats = entryStats(e, form.betType);
         const analysis = analyzeEntry(e, form.betType, form.result?.finishOrder || []).best;
-        return { mode: e.mode, summary: r.summary, count: r.combinations.length, tags: e.tags || [], hitCount: validHits.length, analysis };
+        return { ...stats, analysis };
       }),
       points: totalPoints, unitAmount: form.entries[0]?.unitAmount || 100,
       odds: repOdds, isHit: anyHit,
@@ -1661,6 +1863,8 @@ export default function App() {
       review: form.review || initialForm.review,
       analysis: recordAnalysis,
       investment: totalInvestment, payout: totalPayout, pnl: totalPnl,
+      createdAt: previous?.createdAt || now,
+      updatedAt: now,
     };
 
     const base = editingId ? records.filter(r => r.id !== editingId) : records;
@@ -1686,46 +1890,48 @@ export default function App() {
   };
 
   const handleImport = async (newRecords, replace) => {
-    if (replace) await saveRecords(newRecords.sort((a, b) => b.id - a.id));
-    else { const existing = new Map(records.map(r => [r.id, r])); newRecords.forEach(r => { if (!existing.has(r.id)) existing.set(r.id, r); }); await saveRecords([...existing.values()].sort((a, b) => b.id - a.id)); }
-    showToast(`${newRecords.length}件を${replace ? "復元" : "マージ"}しました`);
+    const safeRecords = validateRecords(newRecords);
+    if (safeRecords.length === 0) return showToast("読み込める記録がありません", "#e05555");
+    const next = replace ? safeRecords : mergeRecordsPreferLatest(records, safeRecords);
+    await saveRecords(next);
+    syncToCloud(next);
+    showToast(`${safeRecords.length}件を${replace ? "復元" : "マージ"}しました`);
   };
 
-  const years = [...new Set(records.map(r => r.date.slice(0, 4)))].sort().reverse();
-  const months = filterYear === "all" ? [] : [...new Set(records.filter(r => r.date.startsWith(filterYear)).map(r => r.date.slice(5, 7)))].sort().reverse();
-  const filtered = records.filter(r => {
-    if (filterYear !== "all" && !r.date.startsWith(filterYear)) return false;
-    if (filterMonth !== "all" && !r.date.startsWith(`${filterYear}-${filterMonth}`)) return false;
-    return true;
-  });
-  const tInv = filtered.reduce((s, r) => s + r.investment, 0);
-  const tPay = filtered.reduce((s, r) => s + r.payout, 0);
-  const tPnl = tPay - tInv;
-  const hitCount = filtered.filter(r => r.isHit).length;
-  const hitRate = filtered.length > 0 ? ((hitCount / filtered.length) * 100).toFixed(1) : "-";
-  const returnRate = tInv > 0 ? ((tPay / tInv) * 100).toFixed(1) : "-";
+  const years = [...new Set(records.map(r => String(r.date).slice(0, 4)))].filter(Boolean).sort().reverse();
+  const statsMonths = statsFilters.year === "all" ? [] : [...new Set(records.filter(r => String(r.date).startsWith(statsFilters.year)).map(r => String(r.date).slice(5, 7)))].sort().reverse();
+  const allVenues = [...new Set(records.map(r => r.venue).filter(Boolean))].sort();
+  const allGrades = [...new Set(records.map(r => r.grade || "平場"))].sort();
+  const allTags = allHistoryTags;
+  const filtered = records.filter(r => recordMatchesFilters(r, historyFilters));
+  const historySummary = summarizeRecords(filtered);
+  const statsRecords = records.filter(r => recordMatchesFilters(r, statsFilters));
+  const statsSummary = summarizeRecords(statsRecords);
   const sortedFiltered = [...filtered].sort((a, b) => {
     const dir = historySort.dir === "asc" ? 1 : -1;
     const value = (r) => {
       if (historySort.key === "roi") return recordRoi(r);
       if (historySort.key === "pnl") return r.pnl;
-      return new Date(r.date).getTime() || Number(r.id) || 0;
+      return new Date(r.date).getTime() || 0;
     };
     const diff = value(a) - value(b);
     if (diff !== 0) return diff * dir;
-    return ((Number(a.id) || 0) - (Number(b.id) || 0)) * dir;
+    return (String(a.id) > String(b.id) ? 1 : -1) * dir;
   });
   const setSortKey = (key) => setHistorySort(s => key === s.key ? { ...s, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "date" ? "desc" : "asc" });
 
   const groupBy = (arr, fn) => { const m = {}; arr.forEach(r => { const k = fn(r); if (!m[k]) m[k] = []; m[k].push(r); }); return Object.entries(m).sort(([a], [b]) => b.localeCompare(a)); };
   const dailyGroups = groupBy(filtered, r => r.date);
   const monthlyGroups = groupBy(filtered, r => r.date.slice(0, 7));
-  const yearlyGroups = groupBy(records, r => r.date.slice(0, 4));
-  const monthlyData = groupBy(records, r => r.date.slice(0, 7)).slice(0, 12);
+  const yearlyGroups = groupBy(filtered, r => r.date.slice(0, 4));
+  const monthlyData = groupBy(statsRecords, r => r.date.slice(0, 7)).slice(0, 12);
+  const modeStats = summarizeByEntryMode(statsRecords);
+  const betTypeStats = groupRecordsBy(statsRecords, r => r.betType);
+  const venueStats = groupRecordsBy(statsRecords, r => r.venue || "未設定");
+  const gradeStats = groupRecordsBy(statsRecords, r => r.grade || "一般");
+  const tagStats = groupRecordsBy(statsRecords.flatMap(r => (r.tags || []).map(tag => ({ ...r, tag }))), r => r.tag);
 
   const venueList = form.venueType === "JRA" ? JRA_VENUES : CHIHO_VENUES;
-  const showMonthFilter = viewMode === "list" || viewMode === "daily";
-  const showYearFilter = viewMode !== "yearly";
 
   return (
     <div style={{ fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", background: "#0d1117", minHeight: "100vh", color: "#e4e6eb", maxWidth: 480, width: "100%", margin: "0 auto", paddingBottom: 80, boxSizing: "border-box" }}>
@@ -1802,6 +2008,17 @@ export default function App() {
           </div>
 
           <PurchaseMemoSection review={form.review || initialForm.review} onChange={handleReviewChange} />
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <Label>メモ</Label>
+            <textarea
+              value={form.memo}
+              onChange={e => setF("memo", e.target.value)}
+              placeholder="予想理由・反省・馬場読みなど"
+              rows={3}
+              style={{ ...inputStyle, minHeight: 82, resize: "vertical", lineHeight: 1.5, marginBottom: 0 }}
+            />
+          </div>
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <Label>券種</Label>
@@ -1910,27 +2127,34 @@ export default function App() {
                 }}>{m.label}</button>
             ))}
           </div>
-          {(showYearFilter || showMonthFilter) && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              {showYearFilter && (
-                <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterMonth("all"); }} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
-                  <option value="all">全期間</option>{years.map(y => <option key={y} value={y}>{y}年</option>)}
-                </select>
-              )}
-              {showMonthFilter && filterYear !== "all" && (
-                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
-                  <option value="all">全月</option>{months.map(m => <option key={m} value={m}>{Number(m)}月</option>)}
-                </select>
-              )}
+          <div style={{ background: "#161c2e", borderRadius: 12, padding: 12, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <input
+              value={historyFilters.query}
+              onChange={e => setHistoryFilters(f => ({ ...f, query: e.target.value }))}
+              placeholder="レース名・買い目・タグ・メモを検索"
+              style={{ ...inputStyle, marginBottom: 8 }}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <FilterSelect value={historyFilters.result} onChange={v => setHistoryFilters(f => ({ ...f, result: v }))} options={[
+                { value: "all", label: "結果すべて" }, { value: "hit", label: "的中" }, { value: "miss", label: "外れ" }, { value: "plus", label: "プラス" }, { value: "minus", label: "マイナス" },
+              ]} />
+              <FilterSelect value={historyFilters.betType} onChange={v => setHistoryFilters(f => ({ ...f, betType: v }))} options={[{ value: "all", label: "券種すべて" }, ...BET_TYPES.map(t => ({ value: t, label: t }))]} />
+              <FilterSelect value={historyFilters.venue} onChange={v => setHistoryFilters(f => ({ ...f, venue: v }))} options={[{ value: "all", label: "競馬場すべて" }, ...allVenues.map(v => ({ value: v, label: v }))]} />
+              <FilterSelect value={historyFilters.grade} onChange={v => setHistoryFilters(f => ({ ...f, grade: v }))} options={[{ value: "all", label: "グレードすべて" }, ...allGrades.map(g => ({ value: g, label: g }))]} />
+              <FilterSelect value={historyFilters.tag} onChange={v => setHistoryFilters(f => ({ ...f, tag: v }))} options={[{ value: "all", label: "タグすべて" }, ...allTags.map(t => ({ value: t, label: `#${t}` }))]} />
+              <button onClick={() => setHistoryFilters({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all" })}
+                style={{ padding: "9px 10px", borderRadius: 8, border: "1px solid #2a3550", background: "#1e2a40", color: "#8899bb", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                条件クリア
+              </button>
             </div>
-          )}
+          </div>
           {(viewMode === "list" || viewMode === "daily") && filtered.length > 0 && (
             <div style={{ background: "#161c2e", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: "1px solid #2a3550", display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4 }}>
-              <StatMini label="投資" value={formatYen(tInv)} small />
-              <StatMini label="払戻" value={formatYen(tPay)} color="#6cbc5e" small />
-              <StatMini label="収支" value={(tPnl >= 0 ? "+" : "") + formatYen(tPnl)} color={tPnl >= 0 ? "#6cbc5e" : "#e05555"} small />
-              <StatMini label="回収率" value={returnRate === "-" ? "-" : returnRate + "%"} color="#e8c86a" small />
-              <StatMini label="的中率" value={hitRate + "%"} color="#e8c86a" small />
+              <StatMini label="投資" value={formatYen(historySummary.investment)} small />
+              <StatMini label="払戻" value={formatYen(historySummary.payout)} color="#6cbc5e" small />
+              <StatMini label="収支" value={(historySummary.pnl >= 0 ? "+" : "") + formatYen(historySummary.pnl)} color={historySummary.pnl >= 0 ? "#6cbc5e" : "#e05555"} small />
+              <StatMini label="回収率" value={historySummary.roi !== null ? historySummary.roi.toFixed(1) + "%" : "-"} color="#e8c86a" small />
+              <StatMini label="的中率" value={historySummary.hitRate !== null ? historySummary.hitRate.toFixed(1) + "%" : "-"} color="#e8c86a" small />
             </div>
           )}
           {viewMode === "list" && filtered.length > 0 && (
@@ -1972,15 +2196,34 @@ export default function App() {
 
       {tab === "stats" && (
         <div style={{ padding: "16px 16px 0", width: "100%", boxSizing: "border-box" }}>
+          <div style={{ background: "#161c2e", borderRadius: 12, padding: 12, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <FilterSelect value={statsFilters.year} onChange={v => setStatsFilters(f => ({ ...f, year: v, month: "all" }))} options={[{ value: "all", label: "全期間" }, ...years.map(y => ({ value: y, label: `${y}年` }))]} />
+              <FilterSelect value={statsFilters.month} onChange={v => setStatsFilters(f => ({ ...f, month: v }))} options={[{ value: "all", label: "全月" }, ...statsMonths.map(m => ({ value: m, label: `${Number(m)}月` }))]} />
+              <FilterSelect value={statsFilters.venueType} onChange={v => setStatsFilters(f => ({ ...f, venueType: v, venue: "all" }))} options={[{ value: "all", label: "区分すべて" }, { value: "JRA", label: "JRA" }, { value: "地方", label: "地方" }]} />
+              <FilterSelect value={statsFilters.venue} onChange={v => setStatsFilters(f => ({ ...f, venue: v }))} options={[{ value: "all", label: "競馬場すべて" }, ...allVenues.map(v => ({ value: v, label: v }))]} />
+              <FilterSelect value={statsFilters.betType} onChange={v => setStatsFilters(f => ({ ...f, betType: v }))} options={[{ value: "all", label: "券種すべて" }, ...BET_TYPES.map(t => ({ value: t, label: t }))]} />
+              <FilterSelect value={statsFilters.grade} onChange={v => setStatsFilters(f => ({ ...f, grade: v }))} options={[{ value: "all", label: "グレードすべて" }, ...allGrades.map(g => ({ value: g, label: g }))]} />
+              <FilterSelect value={statsFilters.result} onChange={v => setStatsFilters(f => ({ ...f, result: v }))} options={[
+                { value: "all", label: "結果すべて" }, { value: "hit", label: "的中" }, { value: "miss", label: "外れ" }, { value: "plus", label: "プラス" }, { value: "minus", label: "マイナス" },
+              ]} />
+              <FilterSelect value={statsFilters.tag} onChange={v => setStatsFilters(f => ({ ...f, tag: v }))} options={[{ value: "all", label: "タグすべて" }, ...allTags.map(t => ({ value: t, label: `#${t}` }))]} />
+            </div>
+            <button onClick={() => setStatsFilters({ year: "all", month: "all", venueType: "all", venue: "all", betType: "all", grade: "all", result: "all", tag: "all" })}
+              style={{ width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 8, border: "1px solid #2a3550", background: "#1e2a40", color: "#8899bb", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              条件クリア
+            </button>
+          </div>
+
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
-            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>通算成績</div>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>集計成績</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <BigStat label="総投資額" value={formatYen(records.reduce((s, r) => s + r.investment, 0))} />
-              <BigStat label="総払戻金" value={formatYen(records.reduce((s, r) => s + r.payout, 0))} color="#6cbc5e" />
-              <BigStat label="通算収支" value={(records.reduce((s, r) => s + r.pnl, 0) >= 0 ? "+" : "") + formatYen(records.reduce((s, r) => s + r.pnl, 0))} color={records.reduce((s, r) => s + r.pnl, 0) >= 0 ? "#6cbc5e" : "#e05555"} />
-              <BigStat label="回収率" value={records.reduce((s, r) => s + r.investment, 0) > 0 ? ((records.reduce((s, r) => s + r.payout, 0) / records.reduce((s, r) => s + r.investment, 0)) * 100).toFixed(1) + "%" : "-"} color="#e8c86a" />
-              <BigStat label="総レース数" value={records.length + "R"} />
-              <BigStat label="的中率" value={records.length > 0 ? ((records.filter(r => r.isHit).length / records.length) * 100).toFixed(1) + "%" : "-"} color="#e8c86a" />
+              <BigStat label="総投資額" value={formatYen(statsSummary.investment)} />
+              <BigStat label="総払戻金" value={formatYen(statsSummary.payout)} color="#6cbc5e" />
+              <BigStat label="通算収支" value={(statsSummary.pnl >= 0 ? "+" : "") + formatYen(statsSummary.pnl)} color={statsSummary.pnl >= 0 ? "#6cbc5e" : "#e05555"} />
+              <BigStat label="回収率" value={statsSummary.roi !== null ? statsSummary.roi.toFixed(1) + "%" : "-"} color="#e8c86a" />
+              <BigStat label="総レース数" value={statsSummary.count + "R"} />
+              <BigStat label="的中率" value={statsSummary.hitRate !== null ? statsSummary.hitRate.toFixed(1) + "%" : "-"} color="#e8c86a" />
             </div>
           </div>
 
@@ -2011,19 +2254,30 @@ export default function App() {
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>券種別成績</div>
-            {BET_TYPES.filter(bt => records.some(r => r.betType === bt)).length === 0
+            {betTypeStats.length === 0
               ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
-              : BET_TYPES.filter(bt => records.some(r => r.betType === bt)).map(bt => {
-                const g = records.filter(r => r.betType === bt); const pnl = g.reduce((s, r) => s + r.pnl, 0);
-                return (
-                  <div key={bt} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1e2a40" }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <BetTypeBadge type={bt} /><span style={{ fontSize: 11, color: "#6b7a99" }}>{g.length}R / {g.filter(r => r.isHit).length}的中</span>
-                    </div>
-                    <PnLText value={pnl} />
-                  </div>
-                );
-              })}
+              : betTypeStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} badge={<BetTypeBadge type={row.key} />} />)}
+          </div>
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>買い方別成績</div>
+            {modeStats.length === 0
+              ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
+              : modeStats.map(row => (
+                <DashboardRow
+                  key={row.key}
+                  label={MODE_LABELS[row.key] || row.key}
+                  stats={{ ...row, count: row.points || row.count }}
+                  badge={<span style={{ fontSize: 11, background: "#2a3a55", color: "#b8d0ff", padding: "2px 7px", borderRadius: 4, fontWeight: 800 }}>{MODE_LABELS[row.key] || row.key}</span>}
+                />
+              ))}
+          </div>
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>競馬場別成績</div>
+            {venueStats.length === 0
+              ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
+              : venueStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} />)}
           </div>
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
@@ -2043,25 +2297,16 @@ export default function App() {
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>グレード別成績</div>
-            {["G1", "G2", "G3", "Jpn1", "Jpn2", "Jpn3", "地方重賞", "OP", "平場", "一般"].filter(g => records.some(r => (r.grade || "平場") === g)).length === 0
+            {gradeStats.length === 0
               ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
-              : ["G1", "G2", "G3", "Jpn1", "Jpn2", "Jpn3", "地方重賞", "OP", "平場", "一般"].filter(g => records.some(r => (r.grade || "平場") === g)).map(g => {
-                const grp = records.filter(r => (r.grade || "平場") === g); const pnl = grp.reduce((s, r) => s + r.pnl, 0);
-                return (
-                  <div key={g} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1e2a40" }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      {!["一般", "平場", "OP"].includes(g) ? <GradeBadge grade={g} /> : <span style={{ fontSize: 12, color: "#778", fontWeight: 600 }}>{g}</span>}
-                      <span style={{ fontSize: 11, color: "#6b7a99" }}>{grp.length}R / {grp.filter(r => r.isHit).length}的中</span>
-                    </div>
-                    <PnLText value={pnl} />
-                  </div>
-                );
-              })}
+              : gradeStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} badge={!["一般", "平場", "OP"].includes(row.key) ? <GradeBadge grade={row.key} /> : undefined} />)}
           </div>
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>タグ別成績</div>
-            <TagStatsList records={records} emptyMsg="タグが入力された記録がありません" />
+            {tagStats.length === 0
+              ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0", fontSize: 12 }}>タグが入力された記録がありません</div>
+              : tagStats.map(row => <DashboardRow key={row.key} label={`#${row.key}`} stats={row} />)}
           </div>
         </div>
       )}
@@ -2112,6 +2357,7 @@ function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
               {r.tags.map(t => <span key={t} style={{ fontSize: 10, background: "#2a3a55", color: "#b8d0ff", padding: "1px 6px", borderRadius: 10, fontWeight: 700 }}>#{t}</span>)}
             </div>
           )}
+          {r.memo && <div style={{ marginTop: 8, padding: "8px 10px", background: "#101827", border: "1px solid #1e2a40", borderRadius: 8, color: "#aab8cc", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.memo}</div>}
         </div>
         <div style={{ display: "flex", gap: 0, alignItems: "center", flexShrink: 0 }}>
           <button onClick={onEdit} style={iconBtn} title="編集">✏️</button>
