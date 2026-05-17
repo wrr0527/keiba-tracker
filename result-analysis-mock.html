@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Keiba Tracker Result Analysis Mock</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0b0f18;
+        color: #e4e6eb;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .app {
+        width: min(100%, 480px);
+        min-height: 100vh;
+        margin: 0 auto;
+        background: #0d1117;
+        padding: 18px 14px 88px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0;
+      }
+      .sub { color: #6b7a99; font-size: 11px; margin-top: 2px; }
+      .pill {
+        border: 1px solid #3a4f7a;
+        border-radius: 999px;
+        padding: 5px 10px;
+        color: #b8d0ff;
+        font-size: 11px;
+        font-weight: 700;
+        background: #162038;
+      }
+      .card {
+        background: #161c2e;
+        border: 1px solid #2a3550;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #aab8cc;
+        font-size: 13px;
+        font-weight: 800;
+        margin-bottom: 12px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 4px;
+        padding: 2px 7px;
+        background: #d45b5b;
+        color: white;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .field-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      label {
+        display: block;
+        color: #6b7a99;
+        font-size: 10px;
+        font-weight: 800;
+        margin-bottom: 5px;
+      }
+      input, textarea {
+        width: 100%;
+        border: 1px solid #2a3550;
+        border-radius: 8px;
+        background: #1e2a40;
+        color: #e4e6eb;
+        font: inherit;
+        padding: 10px 11px;
+        outline: none;
+      }
+      input { text-align: center; font-weight: 800; }
+      textarea {
+        min-height: 70px;
+        resize: vertical;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .result-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        background: #0f1420;
+        border: 1px solid #2a3550;
+        border-radius: 10px;
+        margin-top: 10px;
+      }
+      .combo {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 18px;
+        font-weight: 900;
+        color: #e8c86a;
+      }
+      .hint { color: #6b7a99; font-size: 11px; }
+      .analysis {
+        border-color: #725c24;
+        background: #1f2318;
+      }
+      .analysis-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .analysis-label {
+        color: #0d1117;
+        background: #e8c86a;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .reason {
+        color: #e4e6eb;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.45;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 7px;
+        margin-top: 12px;
+      }
+      .metric {
+        background: #111824;
+        border: 1px solid #2a3550;
+        border-radius: 8px;
+        padding: 9px 6px;
+        text-align: center;
+      }
+      .metric span {
+        display: block;
+        color: #6b7a99;
+        font-size: 10px;
+        margin-bottom: 3px;
+      }
+      .metric strong {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 14px;
+        color: #e4e6eb;
+      }
+      .bets {
+        display: grid;
+        gap: 8px;
+      }
+      .bet {
+        display: grid;
+        grid-template-columns: 34px 1fr auto;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 0;
+        border-bottom: 1px solid #1e2a40;
+      }
+      .bet:last-child { border-bottom: 0; }
+      .box {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        border: 2px solid #5a7aaa;
+        color: #5a7aaa;
+        font-weight: 900;
+      }
+      .bet .name {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+      .tag {
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 10px;
+        font-weight: 800;
+        background: #2a3a55;
+        color: #b8d0ff;
+      }
+      .near { background: #493c18; color: #f0cf70; }
+      .miss { background: #3a1a1a; color: #e05555; }
+      .info { background: #1d3146; color: #88c0ff; }
+      .history {
+        background: #161c2e;
+      }
+      .history-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+      }
+      .date { color: #6b7a99; font-size: 11px; margin-bottom: 4px; }
+      .race { color: #aab8cc; font-size: 12px; font-weight: 700; }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+        margin-top: 12px;
+      }
+      .stat {
+        text-align: center;
+        background: #101725;
+        border-radius: 8px;
+        padding: 8px 4px;
+      }
+      .stat span {
+        display: block;
+        color: #6b7a99;
+        font-size: 10px;
+      }
+      .stat strong {
+        display: block;
+        margin-top: 2px;
+        color: #e05555;
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .searchbox {
+        position: relative;
+      }
+      .suggestions {
+        margin-top: 4px;
+        background: #0f1420;
+        border: 1px solid #2a3550;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .suggestions div {
+        padding: 9px 11px;
+        border-bottom: 1px solid #1e2a40;
+        color: #e4e6eb;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
+        border: 1.5px solid #2a3550;
+        border-radius: 8px;
+        padding: 7px 10px;
+        background: #1e2a40;
+        color: #8899bb;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .chip.active {
+        background: #e8c86a;
+        border-color: #e8c86a;
+        color: #0d1117;
+      }
+      .bottom {
+        position: fixed;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: min(100%, 480px);
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        background: #0d1117;
+        border-top: 1px solid #2a3550;
+        padding: 8px 0;
+      }
+      .nav {
+        text-align: center;
+        color: #6b7a99;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .nav.active { color: #e8c86a; }
+      .nav b { display: block; font-size: 19px; margin-bottom: 2px; }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <div class="top">
+        <div>
+          <h1>馬券収支ノート</h1>
+          <div class="sub">検索候補・購入メモ・結果分析のモック</div>
+        </div>
+        <div class="pill">三連単</div>
+      </div>
+
+      <section class="card">
+        <div class="section-title">
+          <span>レース情報</span>
+          <span class="hint">候補外も入力可</span>
+        </div>
+        <label>グレード</label>
+        <div class="chips" style="margin-bottom:12px">
+          <span class="chip">平場</span>
+          <span class="chip">OP</span>
+          <span class="chip">G3</span>
+          <span class="chip">G2</span>
+          <span class="chip active">G1</span>
+        </div>
+        <label>レース名</label>
+        <div class="searchbox">
+          <input value="皐月" readonly style="text-align:left;font-weight:700" />
+          <div class="suggestions">
+            <div>皐月賞</div>
+            <div>候補にない名前も直接入力できます</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <span>購入メモ</span>
+          <span class="hint">任意</span>
+        </div>
+        <label>購入理由</label>
+        <div class="chips" style="margin-bottom:12px">
+          <span class="chip active">勝負</span>
+          <span class="chip">遊び</span>
+          <span class="chip">現地</span>
+          <span class="chip">テレビ観戦</span>
+        </div>
+        <label>自信度</label>
+        <div class="chips" style="margin-bottom:12px">
+          <span class="chip active">A</span>
+          <span class="chip">B</span>
+          <span class="chip">C</span>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>軸馬人気</label>
+            <input value="2" readonly />
+          </div>
+          <div>
+            <label>軸馬オッズ</label>
+            <input value="4.8" readonly />
+          </div>
+          <div>
+            <label>券種</label>
+            <input value="三連単" readonly />
+          </div>
+        </div>
+        <textarea readonly>軸の安定感と展開利を評価。相手は広げすぎず期待値重視。</textarea>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <span>買い目 1</span>
+          <span class="hint">3点 / ¥300</span>
+        </div>
+        <div class="bets">
+          <div class="bet">
+            <div class="box">□</div>
+            <div class="name">7→12→3</div>
+            <span class="tag near">順番違い</span>
+          </div>
+          <div class="bet">
+            <div class="box">□</div>
+            <div class="name">7→3→8</div>
+            <span class="tag near">2頭</span>
+          </div>
+          <div class="bet">
+            <div class="box">□</div>
+            <div class="name">12→7→3</div>
+            <span class="tag near">3頭</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <span>レース結果</span>
+          <span class="hint">外れでも入力</span>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>1着</label>
+            <input value="7" readonly />
+          </div>
+          <div>
+            <label>2着</label>
+            <input value="3" readonly />
+          </div>
+          <div>
+            <label>3着</label>
+            <input value="12" readonly />
+          </div>
+        </div>
+        <textarea readonly>軸の7は来た。相手も拾えていたが、2着3着の並びを逆に見ていた。</textarea>
+        <div class="result-line">
+          <div>
+            <div class="hint">実際の的中組み合わせ</div>
+            <div class="combo">7→3→12</div>
+          </div>
+          <span class="tag miss">外れ</span>
+        </div>
+      </section>
+
+      <section class="card analysis">
+        <div class="analysis-head">
+          <div class="section-title" style="margin:0">惜しさ判定</div>
+          <span class="analysis-label">順番違い</span>
+        </div>
+        <div class="reason">3頭はすべて馬券圏内。買い目は順番違いで、軸選びと相手選びは良かった。</div>
+        <div class="metrics">
+          <div class="metric"><span>一致頭数</span><strong>3/3</strong></div>
+          <div class="metric"><span>着順一致</span><strong>1/3</strong></div>
+          <div class="metric"><span>軸馬</span><strong>的中</strong></div>
+        </div>
+      </section>
+
+      <section class="card history">
+        <div class="history-title">
+          <span class="badge">三連単</span>
+          <span class="tag miss">外れ</span>
+          <span class="tag near">順番違い</span>
+          <span class="tag info">勝負</span>
+          <span class="tag near">自信A</span>
+          <span class="tag miss">相手抜け</span>
+        </div>
+        <div class="date">2026-05-03（日）</div>
+        <div class="race">東京 11R 皐月賞トライアル</div>
+        <div class="result-line">
+          <div>
+            <div class="hint">予想</div>
+            <div class="combo" style="font-size:14px;color:#e4e6eb">7→12→3 / 7→3→8 / 12→7→3</div>
+          </div>
+        </div>
+        <div class="result-line">
+          <div>
+            <div class="hint">結果</div>
+            <div class="combo">7→3→12</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><span>点数</span><strong>3点</strong></div>
+          <div class="stat"><span>投資</span><strong>¥300</strong></div>
+          <div class="stat"><span>払戻</span><strong>¥0</strong></div>
+          <div class="stat"><span>収支</span><strong>-¥300</strong></div>
+          <div class="stat"><span>回収率</span><strong>0%</strong></div>
+        </div>
+        <details style="background:#0f1420;border-radius:8px;padding:8px 10px;margin-top:8px;border:1px solid #1e2a40">
+          <summary style="font-size:10px;color:#6b7a99;font-weight:700">購入・反省メモ</summary>
+          <div style="color:#aab8cc;font-size:11px;margin-top:6px;line-height:1.6">
+            軸人気: 2番人気<br />
+            軸オッズ: 4.8倍<br />
+            反省: 相手評価は良かったが並びの想定が甘かった。
+          </div>
+        </details>
+      </section>
+    </main>
+
+    <nav class="bottom">
+      <div class="nav active"><b>✏</b>入力</div>
+      <div class="nav"><b>▤</b>履歴</div>
+      <div class="nav"><b>▥</b>統計</div>
+    </nav>
+  </body>
+</html>
