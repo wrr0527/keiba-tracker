@@ -241,6 +241,25 @@ function parseCombo(combo, betType) {
   return parts.map(v => Number(String(v).trim())).filter(n => Number.isFinite(n) && n > 0);
 }
 
+// 旧フォーマットの combination テキストから formEntries を復元する
+function entriesFromOldCombinationText(text, betType) {
+  if (!text) return [newEntry("manual")];
+  const sections = text.trim().split(/\n{2,}/).filter(s => s.trim());
+  const parsed = sections.map(section => {
+    const lines = section.split("\n");
+    const normalized = lines
+      .map(l => l.replace(/\s*✓.*/, "").replace(/\s*⟨.*⟩/, "").trim())
+      .filter(l => {
+        if (!l || l.startsWith("◆") || l.startsWith("【")) return false;
+        return normalizeComboText(l, betType) !== null;
+      })
+      .map(l => normalizeComboText(l, betType));
+    if (normalized.length === 0) return null;
+    return { ...newEntry("manual"), text: normalized.join("\n") + "\n" };
+  }).filter(Boolean);
+  return parsed.length > 0 ? parsed : [newEntry("manual")];
+}
+
 function getEntryAxisAndHimoNos(entry, betType) {
   if (entry.mode === "wheel") {
     return { axisNos: entry.axisHorses || [], himoNos: entry.poolHorses || [] };
@@ -2033,13 +2052,17 @@ export default function App() {
   }, []);
 
   const restoreFormFromRecord = useCallback((r, clearHits = false) => {
-    const entries = r.formEntries
+    const baseEntries = (r.formEntries && r.formEntries.length > 0)
       ? r.formEntries.map(e => ({
           ...e,
           id: Math.random().toString(36).slice(2, 9),
           ...(clearHits ? { hitCombos: [], oddsMap: {} } : {}),
         }))
-      : [newEntry("manual")];
+      : entriesFromOldCombinationText(r.combination, r.betType || "三連単").map(e => ({
+          ...e,
+          id: Math.random().toString(36).slice(2, 9),
+        }));
+    const entries = baseEntries;
 
     // 軸馬情報: 新形式 > 旧形式（per-entry axisHorseInfo）> レビュー > デフォルト
     let axisHorsesInfo;
