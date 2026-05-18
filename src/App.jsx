@@ -45,6 +45,8 @@ const GRADE_OPTIONS = { JRA: ["平場", "OP", "G3", "G2", "G1"], 地方: ["平�
 const PURCHASE_REASONS = ["勝負", "遊び", "現地", "テレビ観戦"];
 const CONFIDENCE_OPTIONS = ["A", "B", "C"];
 const MISS_REASONS = ["軸飛び", "相手抜け", "3着抜け", "買い目絞りすぎ", "完全読み違い"];
+const DISTANCE_OPTIONS = ["1000m","1200m","1400m","1600m","1800m","2000m","2200m","2400m","2500m","3000m","3200m","3600m","その他"];
+const COURSE_TYPES = ["芝","ダート","障害"];
 
 const JOCKEYS = [
   // JRA トップ・主力
@@ -99,6 +101,7 @@ const newEntry = (mode = "manual") => ({
   unitAmount: 100, amountMap: {}, tags: [],
   hitCombos: [],
   oddsMap: {},
+  entryAxisHorses: [],
 });
 
 const newAxisHorse = () => ({ horseNo: "", popularity: "", odds: "", finishOrder: "" });
@@ -107,6 +110,7 @@ const newHimoHorse = () => ({ horseNo: "" });
 const initialForm = {
   date: new Date().toISOString().slice(0, 10),
   venueType: "JRA", venue: "", raceNo: "", grade: "平場", raceName: "",
+  distance: "", courseType: "",
   betType: "三連単", entries: [newEntry("manual")],
   oddsMode: "per100", memo: "",
   result: { finishOrder: [], memo: "" },
@@ -122,6 +126,7 @@ const keepRaceInfo = (prev) => ({
   ...initialForm,
   date: prev.date, venueType: prev.venueType, venue: prev.venue,
   raceNo: prev.raceNo, grade: prev.grade, raceName: prev.raceName,
+  distance: prev.distance || "", courseType: prev.courseType || "",
   oddsMode: prev.oddsMode, betType: prev.betType, memo: prev.memo,
   result: { finishOrder: [], memo: "" },
   axisHorsesInfo: [newAxisHorse()],
@@ -234,6 +239,16 @@ function parseCombo(combo, betType) {
   const { slots, sep } = BET_TYPE_CONFIG[betType];
   const parts = slots === 1 ? [combo] : String(combo).split(sep);
   return parts.map(v => Number(String(v).trim())).filter(n => Number.isFinite(n) && n > 0);
+}
+
+function getEntryAxisAndHimoNos(entry, betType) {
+  if (entry.mode === "wheel") {
+    return { axisNos: entry.axisHorses || [], himoNos: entry.poolHorses || [] };
+  }
+  const allNos = [...new Set(computeEntry(entry, betType).combinations.flatMap(c => parseCombo(c, betType)))];
+  const axisNos = entry.entryAxisHorses || [];
+  const himoNos = allNos.filter(n => !axisNos.includes(n));
+  return { axisNos, himoNos };
 }
 
 function sameSet(a, b) {
@@ -411,6 +426,8 @@ function validateRecord(raw) {
     raceName: typeof raw.raceName === "string" ? raw.raceName : "",
     betType: BET_TYPES.includes(raw.betType) ? raw.betType : "三連単",
     combination: typeof raw.combination === "string" ? raw.combination : "",
+    distance: typeof raw.distance === "string" ? raw.distance : "",
+    courseType: typeof raw.courseType === "string" ? raw.courseType : "",
     memo: typeof raw.memo === "string" ? raw.memo : "",
     tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === "string") : [],
     formEntries: Array.isArray(raw.formEntries) ? raw.formEntries : undefined,
@@ -436,6 +453,8 @@ function createTimestamp() {
 
 function recordMatchesFilters(record, filters) {
   if (!record) return false;
+  if (filters.dateFrom && record.date < filters.dateFrom) return false;
+  if (filters.dateTo && record.date > filters.dateTo) return false;
   if (filters.year && filters.year !== "all" && !String(record.date || "").startsWith(filters.year)) return false;
   if (filters.month && filters.month !== "all" && !String(record.date || "").startsWith(`${filters.year}-${filters.month}`)) return false;
   if (filters.venueType && filters.venueType !== "all" && record.venueType !== filters.venueType) return false;
@@ -1438,6 +1457,87 @@ function UnifiedResultSection({ result, entries, betType, onChange }) {
   );
 }
 
+// ── エントリー軸馬セレクタ ─────────────
+function EntryAxisSelector({ entry, betType, onChange }) {
+  const allNos = useMemo(() => {
+    return [...new Set(computeEntry(entry, betType).combinations.flatMap(c => parseCombo(c, betType)))].sort((a,b) => a-b);
+  }, [entry, betType]);
+  if (allNos.length === 0) return null;
+  const axisSet = new Set(entry.entryAxisHorses || []);
+  const toggle = (n) => {
+    const next = axisSet.has(n) ? (entry.entryAxisHorses || []).filter(x => x !== n) : [...(entry.entryAxisHorses || []), n];
+    onChange({ ...entry, entryAxisHorses: next });
+  };
+  return (
+    <div style={{ marginTop: 10, padding: "10px 12px", background: "#0f1420", borderRadius: 8, border: "1px solid #2a3550" }}>
+      <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 6 }}>軸馬指定（任意）— タップで軸/ヒモ切替</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        {allNos.map(n => {
+          const isAxis = axisSet.has(n);
+          return (
+            <button key={n} onClick={() => toggle(n)}
+              style={{ width: 34, height: 28, borderRadius: 6, border: "1.5px solid", fontSize: 12, fontWeight: 800, cursor: "pointer",
+                background: isAxis ? "#1a2f1e" : "#1e2a40", color: isAxis ? "#6cbc5e" : "#6b7a99",
+                borderColor: isAxis ? "#4a8a5a" : "#2a3550" }}>
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      {axisSet.size > 0 && (
+        <div style={{ fontSize: 10, marginTop: 5, display: "flex", gap: 10 }}>
+          <span style={{ color: "#6cbc5e" }}>軸: {[...axisSet].sort((a,b)=>a-b).join(",")}</span>
+          {allNos.filter(n => !axisSet.has(n)).length > 0 && (
+            <span style={{ color: "#88c0ff" }}>ヒモ: {allNos.filter(n => !axisSet.has(n)).join(",")}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 距離・コース種別セクション ─────────────
+function DistanceCourseSection({ distance, courseType, onDistanceChange, onCourseTypeChange }) {
+  const presets = DISTANCE_OPTIONS.slice(0, -1);
+  const isCustom = distance !== "" && !presets.includes(distance);
+  const selectVal = isCustom ? "その他" : (distance || "");
+  return (
+    <div>
+      <div style={{ marginBottom: 14 }}>
+        <Label>距離（任意）</Label>
+        <div style={{ display: "flex", gap: 6 }}>
+          <select value={selectVal}
+            onChange={e => { if (e.target.value === "その他") onDistanceChange("カスタム"); else onDistanceChange(e.target.value); }}
+            style={{ ...inputStyle, marginBottom: 0, flex: isCustom ? "0 0 120px" : 1, fontSize: 13, padding: "10px 8px" }}>
+            <option value="">選択</option>
+            {DISTANCE_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          {isCustom && (
+            <input type="text" value={distance === "カスタム" ? "" : distance}
+              onChange={e => onDistanceChange(e.target.value)}
+              placeholder="例: 1350m"
+              style={{ ...inputStyle, marginBottom: 0, flex: 1 }} />
+          )}
+        </div>
+      </div>
+      <div style={{ marginBottom: 0 }}>
+        <Label>コース種別（任意）</Label>
+        <div style={{ display: "flex", gap: 6 }}>
+          {COURSE_TYPES.map(ct => (
+            <button key={ct} onClick={() => onCourseTypeChange(courseType === ct ? "" : ct)}
+              style={{ flex: 1, padding: "8px 0", borderRadius: 7, border: "1.5px solid", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: courseType === ct ? "#2a3a55" : "#1e2a40",
+                color: courseType === ct ? "#b8d0ff" : "#778899",
+                borderColor: courseType === ct ? "#5b7fbf" : "#2a3550" }}>
+              {ct}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 買い目エントリーカード ─────────────
 function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, allHistoryTags, finishOrder }) {
   const cfg = BET_TYPE_CONFIG[betType];
@@ -1479,6 +1579,8 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
       {entry.mode === "box" && <BoxEditor entry={entry} onChange={onChange} betType={betType} />}
       {entry.mode === "wheel" && <WheelEditor entry={entry} onChange={onChange} betType={betType} />}
       {entry.mode === "formation" && <FormationEditor entry={entry} onChange={onChange} betType={betType} />}
+
+      {entry.mode !== "wheel" && <EntryAxisSelector entry={entry} betType={betType} onChange={onChange} />}
 
       <div style={{ marginTop: 14, padding: "12px", background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10 }}>
         <Label>1点のデフォルト金額</Label>
@@ -1862,14 +1964,14 @@ export default function App() {
   const [tab, setTab] = useState("input");
   const [form, setForm] = useState(initialForm);
   const [records, setRecords] = useState(loadLocalRecords);
-  const [viewMode, setViewMode] = useState("list");
+  const [statsViewMode, setStatsViewMode] = useState("summary");
   const [toast, setToast] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [dataManagerOpen, setDataManagerOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [historySort, setHistorySort] = useState({ key: "date", dir: "desc" });
-  const [historyFilters, setHistoryFilters] = useState({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all" });
+  const [historyFilters, setHistoryFilters] = useState({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all", dateFrom: "", dateTo: "" });
   const [statsFilters, setStatsFilters] = useState({ year: "all", month: "all", venueType: "all", venue: "all", betType: "all", grade: "all", result: "all", tag: "all" });
   // セッション中に削除したIDを追跡し、クラウドマージで復元されるのを防ぐ
   const deletedIdsRef = useRef(new Set());
@@ -1982,6 +2084,7 @@ export default function App() {
       ...initialForm,
       date: r.date, venueType: r.venueType || "JRA", venue: r.venue || "",
       raceNo: r.raceNo || "", grade: r.grade || "平場", raceName: r.raceName || "",
+      distance: r.distance || "", courseType: r.courseType || "",
       betType: r.betType || "三連単",
       oddsMode: form.oddsMode,
       memo: r.memo || "",
@@ -2103,6 +2206,7 @@ export default function App() {
       id: editingId || now,
       date: form.date, venueType: form.venueType, venue: form.venue, raceNo: form.raceNo,
       grade: form.grade, raceName: form.raceName,
+      distance: form.distance || "", courseType: form.courseType || "",
       betType: form.betType, combination: combinationText,
       tags: allTags,
       memo: form.memo.trim(),
@@ -2179,11 +2283,13 @@ export default function App() {
   const setSortKey = (key) => setHistorySort(s => key === s.key ? { ...s, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "date" ? "desc" : "asc" });
 
   const groupBy = (arr, fn) => { const m = {}; arr.forEach(r => { const k = fn(r); if (!m[k]) m[k] = []; m[k].push(r); }); return Object.entries(m).sort(([a], [b]) => b.localeCompare(a)); };
-  const dailyGroups = groupBy(filtered, r => r.date);
-  const monthlyGroups = groupBy(filtered, r => r.date.slice(0, 7));
-  const yearlyGroups = groupBy(filtered, r => r.date.slice(0, 4));
   const monthlyData = groupBy(statsRecords, r => r.date.slice(0, 7)).slice(0, 12);
   const modeStats = summarizeByEntryMode(statsRecords);
+  const distanceStats = groupRecordsBy(statsRecords.filter(r => r.distance), r => r.distance || "未設定");
+  const courseTypeStats = groupRecordsBy(statsRecords.filter(r => r.courseType), r => r.courseType || "未設定");
+  const statsGroupedByDay = groupBy(statsRecords, r => r.date);
+  const statsGroupedByMonth = groupBy(statsRecords, r => r.date.slice(0, 7));
+  const statsGroupedByYear = groupBy(statsRecords, r => r.date.slice(0, 4));
   // 軸馬エントリー: 新形式（axisHorsesInfo）+ 旧形式（formEntries[].axisHorseInfo）バックワード互換
   const axisHorseEntries = statsRecords.flatMap(r => {
     if (r.axisHorsesInfo && r.axisHorsesInfo.length > 0) {
@@ -2205,21 +2311,27 @@ export default function App() {
       }));
   });
 
-  // ヒモ馬エントリー: himoHorsesInfo + raceResult から着順を導出
+  // ヒモ馬エントリー: himoHorsesInfo + raceResult から着順を導出（entryAxisHorsesからも派生）
   const himoHorseEntries = statsRecords.flatMap(r => {
-    if (!r.himoHorsesInfo || r.himoHorsesInfo.length === 0) return [];
     const fo = r.result?.finishOrder || [];
     const first = Number(fo[0]) || Number(r.raceResult?.first) || null;
     const second = Number(fo[1]) || Number(r.raceResult?.second) || null;
     const third = Number(fo[2]) || Number(r.raceResult?.third) || null;
     if (!first) return [];
-    return r.himoHorsesInfo
-      .filter(h => h.horseNo !== "")
-      .map(h => {
+    if (r.himoHorsesInfo && r.himoHorsesInfo.length > 0) {
+      return r.himoHorsesInfo.filter(h => h.horseNo !== "").map(h => {
         const hn = Number(h.horseNo);
         const place = hn === first ? 1 : hn === second ? 2 : hn === third ? 3 : 99;
         return { fo: place };
       });
+    }
+    return (r.formEntries || []).flatMap(e => {
+      const { himoNos } = getEntryAxisAndHimoNos(e, r.betType);
+      return himoNos.map(hn => {
+        const place = hn === first ? 1 : hn === second ? 2 : hn === third ? 3 : 99;
+        return { fo: place };
+      });
+    });
   });
 
   const betHorseRows = statsRecords.flatMap(r => {
@@ -2312,6 +2424,14 @@ export default function App() {
 
             <Label>レース名{!["一般", "平場"].includes(form.grade) ? `（${form.grade} レース）` : "（任意）"}</Label>
             <SearchableRaceNameInput value={form.raceName} onChange={v => setF("raceName", v)} grade={form.grade} />
+            <div style={{ marginTop: 14 }}>
+              <DistanceCourseSection
+                distance={form.distance || ""}
+                courseType={form.courseType || ""}
+                onDistanceChange={v => setF("distance", v)}
+                onCourseTypeChange={v => setF("courseType", v)}
+              />
+            </div>
           </div>
 
           <PurchaseMemoSection review={form.review || initialForm.review} onChange={handleReviewChange} />
@@ -2441,14 +2561,6 @@ export default function App() {
 
       {tab === "history" && (
         <div style={{ padding: "16px 16px 0", width: "100%", boxSizing: "border-box" }}>
-          <div style={{ display: "flex", background: "#161c2e", borderRadius: 10, padding: 3, marginBottom: 12, border: "1px solid #2a3550" }}>
-            {[{ id: "list", label: "一覧" }, { id: "daily", label: "日別" }, { id: "monthly", label: "月別" }, { id: "yearly", label: "年別" }].map(m => (
-              <button key={m.id} onClick={() => setViewMode(m.id)}
-                style={{ flex: 1, padding: "7px 0", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
-                  background: viewMode === m.id ? "#e8c86a" : "transparent", color: viewMode === m.id ? "#0d1117" : "#6b7a99",
-                }}>{m.label}</button>
-            ))}
-          </div>
           <div style={{ background: "#161c2e", borderRadius: 12, padding: 12, marginBottom: 14, border: "1px solid #2a3550" }}>
             <input
               value={historyFilters.query}
@@ -2464,13 +2576,23 @@ export default function App() {
               <FilterSelect value={historyFilters.venue} onChange={v => setHistoryFilters(f => ({ ...f, venue: v }))} options={[{ value: "all", label: "競馬場すべて" }, ...allVenues.map(v => ({ value: v, label: v }))]} />
               <FilterSelect value={historyFilters.grade} onChange={v => setHistoryFilters(f => ({ ...f, grade: v }))} options={[{ value: "all", label: "グレードすべて" }, ...allGrades.map(g => ({ value: g, label: g }))]} />
               <FilterSelect value={historyFilters.tag} onChange={v => setHistoryFilters(f => ({ ...f, tag: v }))} options={[{ value: "all", label: "タグすべて" }, ...allTags.map(t => ({ value: t, label: `#${t}` }))]} />
-              <button onClick={() => setHistoryFilters({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all" })}
+              <button onClick={() => setHistoryFilters({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all", dateFrom: "", dateTo: "" })}
                 style={{ padding: "9px 10px", borderRadius: 8, border: "1px solid #2a3550", background: "#1e2a40", color: "#8899bb", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                 条件クリア
               </button>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 4 }}>期間フィルタ</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input type="date" value={historyFilters.dateFrom} onChange={e => setHistoryFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                    style={{ ...inputStyle, marginBottom: 0, flex: 1, fontSize: 12, padding: "8px 8px" }} />
+                  <span style={{ color: "#6b7a99", fontSize: 12 }}>〜</span>
+                  <input type="date" value={historyFilters.dateTo} onChange={e => setHistoryFilters(f => ({ ...f, dateTo: e.target.value }))}
+                    style={{ ...inputStyle, marginBottom: 0, flex: 1, fontSize: 12, padding: "8px 8px" }} />
+                </div>
+              </div>
             </div>
           </div>
-          {(viewMode === "list" || viewMode === "daily") && filtered.length > 0 && (
+          {filtered.length > 0 && (
             <div style={{ background: "#161c2e", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: "1px solid #2a3550", display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4 }}>
               <StatMini label="投資" value={formatYen(historySummary.investment)} small />
               <StatMini label="払戻" value={formatYen(historySummary.payout)} color="#6cbc5e" small />
@@ -2479,7 +2601,7 @@ export default function App() {
               <StatMini label="的中率" value={historySummary.hitRate !== null ? historySummary.hitRate.toFixed(1) + "%" : "-"} color="#e8c86a" small />
             </div>
           )}
-          {viewMode === "list" && filtered.length > 0 && (
+          {filtered.length > 0 && (
             <div style={{ background: "#161c2e", borderRadius: 12, padding: 10, marginBottom: 14, border: "1px solid #2a3550" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
                 {[{ key: "date", label: "日付" }, { key: "roi", label: "回収率" }, { key: "pnl", label: "収支" }].map(item => (
@@ -2495,10 +2617,7 @@ export default function App() {
               </div>
             </div>
           )}
-          {viewMode === "list" && (filtered.length === 0 ? <EmptyState /> : sortedFiltered.map(r => <RecordCard key={r.id} record={r} onDelete={() => setDeleteTarget(r.id)} onEdit={() => handleEdit(r)} onCopy={() => handleCopy(r)} />))}
-          {viewMode === "daily" && (dailyGroups.length === 0 ? <EmptyState /> : dailyGroups.map(([d, recs]) => <SummaryCard key={d} title={d.replace(/-/g, "/")} subtitle={`(${dayOfWeek(d)}曜日)`} records={recs} />))}
-          {viewMode === "monthly" && (monthlyGroups.length === 0 ? <EmptyState /> : monthlyGroups.map(([ym, recs]) => { const [y, m] = ym.split("-"); return <SummaryCard key={ym} title={`${y}年 ${Number(m)}月`} records={recs} />; }))}
-          {viewMode === "yearly" && (yearlyGroups.length === 0 ? <EmptyState /> : yearlyGroups.map(([y, recs]) => <SummaryCard key={y} title={`${y}年`} records={recs} />))}
+          {filtered.length === 0 ? <EmptyState /> : sortedFiltered.map(r => <RecordCard key={r.id} record={r} onDelete={() => setDeleteTarget(r.id)} onEdit={() => handleEdit(r)} onCopy={() => handleCopy(r)} />)}
 
           {deleteTarget && (
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
@@ -2537,6 +2656,18 @@ export default function App() {
             </button>
           </div>
 
+          <div style={{ display: "flex", background: "#161c2e", borderRadius: 10, padding: 3, marginBottom: 12, border: "1px solid #2a3550" }}>
+            {[{ id: "summary", label: "概要" }, { id: "daily", label: "日別" }, { id: "monthly", label: "月別" }, { id: "yearly", label: "年別" }].map(m => (
+              <button key={m.id} onClick={() => setStatsViewMode(m.id)}
+                style={{ flex: 1, padding: "7px 0", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  background: statsViewMode === m.id ? "#e8c86a" : "transparent", color: statsViewMode === m.id ? "#0d1117" : "#6b7a99" }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {statsViewMode === "summary" && (
+            <>
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>集計成績</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -2547,31 +2678,6 @@ export default function App() {
               <BigStat label="総レース数" value={statsSummary.count + "R"} />
               <BigStat label="的中率" value={statsSummary.hitRate !== null ? statsSummary.hitRate.toFixed(1) + "%" : "-"} color="#e8c86a" />
             </div>
-          </div>
-
-          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
-            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>月別成績</div>
-            {monthlyData.length === 0 ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
-              : monthlyData.map(([ym, recs]) => {
-                const inv = recs.reduce((s, r) => s + r.investment, 0); const pay = recs.reduce((s, r) => s + r.payout, 0);
-                const pnl = pay - inv; const hits = recs.filter(r => r.isHit).length;
-                const maxAbs = Math.max(...monthlyData.map(([, x]) => Math.abs(x.reduce((s, r) => s + r.payout, 0) - x.reduce((s, r) => s + r.investment, 0))), 1);
-                return (
-                  <div key={ym} style={{ marginBottom: 14 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, color: "#aab", fontWeight: 600 }}>{ym.replace("-", "年")}月</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: pnl >= 0 ? "#6cbc5e" : "#e05555" }}>{pnl >= 0 ? "+" : ""}{formatYen(pnl)}</span>
-                    </div>
-                    <div style={{ height: 6, background: "#1e2a40", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: (Math.abs(pnl) / maxAbs * 100) + "%", background: pnl >= 0 ? "#6cbc5e" : "#e05555", borderRadius: 3 }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 12, marginTop: 5 }}>
-                      <span style={{ fontSize: 11, color: "#6b7a99" }}>{recs.length}R / {hits}的中</span>
-                      <span style={{ fontSize: 11, color: "#6b7a99" }}>回収率 {inv > 0 ? ((pay / inv) * 100).toFixed(0) : 0}%</span>
-                    </div>
-                  </div>
-                );
-              })}
           </div>
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
@@ -2623,6 +2729,19 @@ export default function App() {
               ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
               : gradeStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} badge={!["一般", "平場", "OP"].includes(row.key) ? <GradeBadge grade={row.key} /> : undefined} />)}
           </div>
+
+          {distanceStats.length > 0 && (
+            <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+              <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>距離別成績</div>
+              {distanceStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} />)}
+            </div>
+          )}
+          {courseTypeStats.length > 0 && (
+            <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+              <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>コース別成績</div>
+              {courseTypeStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} />)}
+            </div>
+          )}
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>タグ別成績</div>
@@ -2792,6 +2911,54 @@ export default function App() {
               </div>
             )}
           </div>
+            </>
+          )}
+
+          {statsViewMode === "daily" && (
+            <>
+              {statsGroupedByDay.length === 0
+                ? <div style={{ textAlign: "center", padding: "40px 20px", color: "#445", fontSize: 12 }}>データなし</div>
+                : statsGroupedByDay.map(([d, recs]) => <SummaryCard key={d} title={d.replace(/-/g, "/")} subtitle={`(${dayOfWeek(d)}曜日)`} records={recs} />)}
+            </>
+          )}
+
+          {statsViewMode === "monthly" && (
+            <>
+              <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+                <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>月別成績グラフ</div>
+                {monthlyData.length === 0 ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0" }}>データなし</div>
+                  : monthlyData.map(([ym, recs]) => {
+                    const inv = recs.reduce((s, r) => s + r.investment, 0); const pay = recs.reduce((s, r) => s + r.payout, 0);
+                    const pnl = pay - inv; const hits = recs.filter(r => r.isHit).length;
+                    const maxAbs = Math.max(...monthlyData.map(([, x]) => Math.abs(x.reduce((s, r) => s + r.payout, 0) - x.reduce((s, r) => s + r.investment, 0))), 1);
+                    return (
+                      <div key={ym} style={{ marginBottom: 14 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, color: "#aab", fontWeight: 600 }}>{ym.replace("-", "年")}月</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: pnl >= 0 ? "#6cbc5e" : "#e05555" }}>{pnl >= 0 ? "+" : ""}{formatYen(pnl)}</span>
+                        </div>
+                        <div style={{ height: 6, background: "#1e2a40", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: (Math.abs(pnl) / maxAbs * 100) + "%", background: pnl >= 0 ? "#6cbc5e" : "#e05555", borderRadius: 3 }} />
+                        </div>
+                        <div style={{ display: "flex", gap: 12, marginTop: 5 }}>
+                          <span style={{ fontSize: 11, color: "#6b7a99" }}>{recs.length}R / {hits}的中</span>
+                          <span style={{ fontSize: 11, color: "#6b7a99" }}>回収率 {inv > 0 ? ((pay / inv) * 100).toFixed(0) : 0}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              {statsGroupedByMonth.map(([ym, recs]) => { const [y, m] = ym.split("-"); return <SummaryCard key={ym} title={`${y}年 ${Number(m)}月`} records={recs} />; })}
+            </>
+          )}
+
+          {statsViewMode === "yearly" && (
+            <>
+              {statsGroupedByYear.length === 0
+                ? <div style={{ textAlign: "center", padding: "40px 20px", color: "#445", fontSize: 12 }}>データなし</div>
+                : statsGroupedByYear.map(([y, recs]) => <SummaryCard key={y} title={`${y}年`} records={recs} />)}
+            </>
+          )}
         </div>
       )}
 
