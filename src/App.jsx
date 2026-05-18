@@ -1871,6 +1871,8 @@ export default function App() {
   const [historySort, setHistorySort] = useState({ key: "date", dir: "desc" });
   const [historyFilters, setHistoryFilters] = useState({ query: "", result: "all", betType: "all", venue: "all", grade: "all", tag: "all" });
   const [statsFilters, setStatsFilters] = useState({ year: "all", month: "all", venueType: "all", venue: "all", betType: "all", grade: "all", result: "all", tag: "all" });
+  // セッション中に削除したIDを追跡し、クラウドマージで復元されるのを防ぐ
+  const deletedIdsRef = useRef(new Set());
   const showToast = useCallback((msg, color = "#6cbc5e") => {
     setToast({ msg, color });
     setTimeout(() => setToast(null), 2400);
@@ -1916,7 +1918,9 @@ export default function App() {
     if (!getToken()) return;
     try {
       const remote = validateRecords(await downloadRecords());
-      const merged = mergeRecordsPreferLatest(next, remote);
+      // セッション中に削除したIDはクラウド側にも残っている可能性があるため除外してからマージ
+      const filteredRemote = remote.filter(r => !deletedIdsRef.current.has(String(r.id)));
+      const merged = mergeRecordsPreferLatest(next, filteredRemote);
       await uploadRecords(merged);
       if (JSON.stringify(merged) !== JSON.stringify(next)) {
         setRecords(merged);
@@ -2500,7 +2504,7 @@ export default function App() {
                 <div style={{ color: "#6b7a99", fontSize: 13, marginBottom: 20 }}>この操作は元に戻せません</div>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={() => setDeleteTarget(null)} style={{ flex: 1, padding: 10, borderRadius: 8, background: "#2a3550", border: "none", color: "#e4e6eb", cursor: "pointer", fontWeight: 600 }}>キャンセル</button>
-                  <button onClick={async () => { const next = records.filter(r => r.id !== deleteTarget); await saveRecords(next); syncToCloud(next); setDeleteTarget(null); showToast("削除しました", "#888"); }}
+                  <button onClick={async () => { deletedIdsRef.current.add(String(deleteTarget)); const next = records.filter(r => r.id !== deleteTarget); await saveRecords(next); syncToCloud(next); setDeleteTarget(null); showToast("削除しました", "#888"); }}
                     style={{ flex: 1, padding: 10, borderRadius: 8, background: "#e05555", border: "none", color: "#fff", cursor: "pointer", fontWeight: 700 }}>削除</button>
                 </div>
               </div>
