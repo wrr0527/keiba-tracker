@@ -1443,7 +1443,7 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
   const cfg = BET_TYPE_CONFIG[betType];
   const result = computeEntry(entry, betType);
   const modeDisabled = { wheel: cfg.slots === 1, formation: cfg.slots === 1 };
-  const setMode = (mode) => { const fresh = newEntry(mode); onChange({ ...fresh, id: entry.id, unitAmount: entry.unitAmount, tags: entry.tags }); };
+  const setMode = (mode) => { if (mode === entry.mode) return; const fresh = newEntry(mode); onChange({ ...fresh, id: entry.id, unitAmount: entry.unitAmount, tags: entry.tags }); };
 
   const invest = result.combinations.reduce((s, c) => s + (entry.amountMap?.[c] ?? entry.unitAmount), 0);
   const payout = entryPayout(entry, betType);
@@ -2011,7 +2011,10 @@ export default function App() {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const handleVenueTypeChange = (vt) => setForm(f => ({ ...f, venueType: vt, venue: "", grade: "平場", raceName: "" }));
   const handleGradeChange = (g) => setForm(f => ({ ...f, grade: g, raceName: "" }));
-  const handleBetTypeChange = (t) => setForm(f => ({ ...f, betType: t, entries: autoMarkHits([newEntry("manual")], t, f.result?.finishOrder || []) }));
+  const handleBetTypeChange = (t) => setForm(f => {
+    if (t === f.betType) return f;
+    return { ...f, betType: t, entries: autoMarkHits([newEntry("manual")], t, f.result?.finishOrder || []) };
+  });
   const updateEntry = (id, next) => setForm(f => {
     const entries = f.entries.map(e => e.id === id ? next : e);
     return { ...f, entries: autoMarkHits(entries, f.betType, f.result?.finishOrder || []) };
