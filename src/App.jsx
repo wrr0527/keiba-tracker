@@ -99,6 +99,7 @@ const newEntry = (mode = "manual") => ({
   unitAmount: 100, amountMap: {}, tags: [],
   hitCombos: [], // 的中した組み合わせ ["3-7-12", ...]
   oddsMap: {},   // 組み合わせ別オッズ { "3-7-12": 23.4 } 倍率で保存
+  axisHorseInfo: { popularity: "", odds: "", finishOrder: "" },
 });
 
 const initialForm = {
@@ -107,6 +108,7 @@ const initialForm = {
   betType: "三連単", entries: [newEntry("manual")],
   oddsMode: "per100", memo: "",
   result: { finishOrder: [], memo: "" },
+  raceResult: { first: "", second: "", third: "" },
   review: {
     purchaseReason: "", confidence: "",
     axisPopularity: "", axisOdds: "",
@@ -1179,6 +1181,116 @@ function ManualHitChecker({ entry, onChange, analysisPerCombo, resultDriven }) {
   return <CombinationsList entry={entry} combinations={lines} onChange={onChange} analysisPerCombo={analysisPerCombo} resultDriven={resultDriven} />;
 }
 
+// ── 軸馬詳細情報 ─────────────
+function AxisHorseInfoSection({ axisHorseInfo, onChange }) {
+  const info = axisHorseInfo || { popularity: "", odds: "", finishOrder: "" };
+  const set = (key, value) => onChange({ ...info, [key]: value });
+  const hasAny = info.popularity || info.odds || info.finishOrder;
+  return (
+    <details style={{ marginTop: 10 }}>
+      <summary style={{ color: hasAny ? "#e8c86a" : "#6b7a99", fontSize: 12, fontWeight: 800, cursor: "pointer", userSelect: "none", outline: "none" }}>
+        ▶ 軸馬の詳細情報を記録（任意）{hasAny ? " ●" : ""}
+      </summary>
+      <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>最終人気</div>
+          <select value={info.popularity} onChange={e => set("popularity", e.target.value)}
+            style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }}>
+            <option value="">-</option>
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}人気</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>単勝オッズ</div>
+          <input type="number" min="1" step="0.1" inputMode="decimal" value={info.odds}
+            onChange={e => set("odds", e.target.value)} placeholder="例：5.8"
+            style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>着順</div>
+          <select value={info.finishOrder} onChange={e => set("finishOrder", e.target.value)}
+            style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }}>
+            <option value="">-</option>
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}着</option>)}
+            <option value="着外">着外</option>
+          </select>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+// ── レース結果記録（馬番）─────────────
+function RaceResultSection({ raceResult, onChange, entries, betType }) {
+  const result = raceResult || { first: "", second: "", third: "" };
+  const set = (key, value) => onChange({ ...result, [key]: value });
+  const hasAny = result.first || result.second || result.third;
+
+  const allBetHorses = useMemo(() => {
+    const nums = new Set();
+    (entries || []).forEach(e => {
+      computeEntry(e, betType).combinations.forEach(c => {
+        parseCombo(c, betType).forEach(n => nums.add(n));
+      });
+    });
+    return [...nums].sort((a, b) => a - b);
+  }, [entries, betType]);
+
+  const first = Number(result.first) || null;
+  const second = Number(result.second) || null;
+  const third = Number(result.third) || null;
+
+  return (
+    <details style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <summary style={{ color: hasAny ? "#e8c86a" : "#6b7a99", fontSize: 13, fontWeight: 800, cursor: "pointer", userSelect: "none", outline: "none" }}>
+        ▶ レース結果を記録（任意）{hasAny ? " ●" : ""}
+      </summary>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+          {[["first", "1着"], ["second", "2着"], ["third", "3着"]].map(([key, label]) => (
+            <div key={key}>
+              <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>{label}馬番</div>
+              <select value={result[key]} onChange={e => set(key, e.target.value)}
+                style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }}>
+                <option value="">-</option>
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        {hasAny && allBetHorses.length > 0 && (
+          <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 8 }}>買い目に含む馬の着順</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {allBetHorses.map(h => {
+                const pos = h === first ? "1着" : h === second ? "2着" : h === third ? "3着" : null;
+                return (
+                  <span key={h} style={{
+                    padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 800, fontFamily: "monospace",
+                    background: pos ? "#1a4a1a" : "#1e2a40",
+                    color: pos ? "#6cbc5e" : "#445",
+                    border: `1px solid ${pos ? "#6cbc5e" : "#2a3550"}`,
+                  }}>
+                    {h}{pos ? `(${pos})` : ""}
+                  </span>
+                );
+              })}
+            </div>
+            {(() => {
+              const placed = allBetHorses.filter(h => h === first || h === second || h === third);
+              return placed.length > 0 && (
+                <div style={{ marginTop: 8, fontSize: 11, color: "#6cbc5e" }}>
+                  買い目馬 {allBetHorses.length}頭中 {placed.length}頭が1〜3着圏
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 // ── 買い目エントリーカード ─────────────
 function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, allHistoryTags, finishOrder }) {
   const cfg = BET_TYPE_CONFIG[betType];
@@ -1238,6 +1350,8 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
         <Label>タグ（騎手・馬名など）</Label>
         <TagInputWithSuggest tags={entry.tags || []} onChange={v => onChange({ ...entry, tags: v })} allHistoryTags={allHistoryTags} placeholder="騎手名・馬名を入力..." />
       </div>
+
+      <AxisHorseInfoSection axisHorseInfo={entry.axisHorseInfo} onChange={info => onChange({ ...entry, axisHorseInfo: info })} />
 
       {/* サマリー */}
       <div style={{ marginTop: 12, padding: "10px 12px", background: result.combinations.length > 0 ? "#1a2a1a" : "#2a1a1a", borderRadius: 8, border: `1px solid ${result.combinations.length > 0 ? "#2a3a2a" : "#3a2a2a"}` }}>
@@ -1744,6 +1858,7 @@ export default function App() {
       oddsMode: form.oddsMode,
       memo: r.memo || "",
       result: clearHits ? { finishOrder: [], memo: "" } : (r.result || { finishOrder: [], memo: "" }),
+      raceResult: clearHits ? { first: "", second: "", third: "" } : (r.raceResult || { first: "", second: "", third: "" }),
       review: clearHits
         ? { ...initialForm.review, purchaseReason: r.review?.purchaseReason || "", confidence: r.review?.confidence || "", axisPopularity: r.review?.axisPopularity || "", axisOdds: r.review?.axisOdds || "", expectationMemo: r.review?.expectationMemo || "" }
         : { ...initialForm.review, ...(r.review || {}) },
@@ -1860,6 +1975,7 @@ export default function App() {
       points: totalPoints, unitAmount: form.entries[0]?.unitAmount || 100,
       odds: repOdds, isHit: anyHit,
       result: form.result || { finishOrder: [], memo: "" },
+      raceResult: form.raceResult || { first: "", second: "", third: "" },
       review: form.review || initialForm.review,
       analysis: recordAnalysis,
       investment: totalInvestment, payout: totalPayout, pnl: totalPnl,
@@ -1926,6 +2042,26 @@ export default function App() {
   const yearlyGroups = groupBy(filtered, r => r.date.slice(0, 4));
   const monthlyData = groupBy(statsRecords, r => r.date.slice(0, 7)).slice(0, 12);
   const modeStats = summarizeByEntryMode(statsRecords);
+  const axisHorseEntries = statsRecords.flatMap(r =>
+    (r.formEntries || [])
+      .filter(e => e.axisHorseInfo?.finishOrder !== "" && e.axisHorseInfo?.finishOrder != null)
+      .map(e => ({
+        popularity: e.axisHorseInfo.popularity !== "" ? Number(e.axisHorseInfo.popularity) : null,
+        odds: e.axisHorseInfo.odds !== "" ? Number(e.axisHorseInfo.odds) : null,
+        fo: e.axisHorseInfo.finishOrder === "着外" ? 99 : Number(e.axisHorseInfo.finishOrder),
+      }))
+  );
+  const betHorseRows = statsRecords.flatMap(r => {
+    if (!r.raceResult) return [];
+    const first = Number(r.raceResult.first) || null;
+    const second = Number(r.raceResult.second) || null;
+    const third = Number(r.raceResult.third) || null;
+    if (!first && !second && !third) return [];
+    const allHorses = [...new Set(
+      (r.formEntries || []).flatMap(e => computeEntry(e, r.betType).combinations.flatMap(c => parseCombo(c, r.betType)))
+    )];
+    return allHorses.map(h => ({ isFirst: h === first, isTop2: h === first || h === second, isTop3: h === first || h === second || h === third }));
+  });
   const betTypeStats = groupRecordsBy(statsRecords, r => r.betType);
   const venueStats = groupRecordsBy(statsRecords, r => r.venue || "未設定");
   const gradeStats = groupRecordsBy(statsRecords, r => r.grade || "一般");
@@ -2071,6 +2207,12 @@ export default function App() {
             <>
               <ResultInput result={form.result || { finishOrder: [], memo: "" }} betType={form.betType} entries={form.entries} onChange={handleResultChange} />
               <ResultOddsInput entries={form.entries} betType={form.betType} oddsMode={form.oddsMode} onChangeEntry={updateEntry} />
+              <RaceResultSection
+                raceResult={form.raceResult}
+                onChange={rr => setF("raceResult", rr)}
+                entries={form.entries}
+                betType={form.betType}
+              />
               {computeWinningCombos(form.result?.finishOrder || [], form.betType).length > 0 && (
                 <ReviewMemoSection review={form.review || initialForm.review} isHit={anyHit} onChange={handleReviewChange} />
               )}
@@ -2302,11 +2444,116 @@ export default function App() {
               : gradeStats.map(row => <DashboardRow key={row.key} label={row.key} stats={row} badge={!["一般", "平場", "OP"].includes(row.key) ? <GradeBadge grade={row.key} /> : undefined} />)}
           </div>
 
-          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, border: "1px solid #2a3550" }}>
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>タグ別成績</div>
             {tagStats.length === 0
               ? <div style={{ color: "#445", textAlign: "center", padding: "20px 0", fontSize: 12 }}>タグが入力された記録がありません</div>
               : tagStats.map(row => <DashboardRow key={row.key} label={`#${row.key}`} stats={row} />)}
+          </div>
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, border: "1px solid #2a3550" }}>
+            <div style={{ fontSize: 12, color: "#6b7a99", fontWeight: 600, marginBottom: 16, letterSpacing: 1, textTransform: "uppercase" }}>馬の成績</div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: "#b8d0ff", fontWeight: 700, marginBottom: 10 }}>軸馬の成績</div>
+              {axisHorseEntries.length === 0 ? (
+                <div style={{ color: "#445", fontSize: 12 }}>軸馬の着順が入力された記録がありません</div>
+              ) : (() => {
+                const total = axisHorseEntries.length;
+                const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(1) + "%" : "-";
+                const popBands = [
+                  { label: "1人気", f: d => d.popularity === 1 },
+                  { label: "2人気", f: d => d.popularity === 2 },
+                  { label: "3人気", f: d => d.popularity === 3 },
+                  { label: "4-6人気", f: d => d.popularity >= 4 && d.popularity <= 6 },
+                  { label: "7人気以上", f: d => d.popularity >= 7 },
+                ];
+                const oddsBands = [
+                  { label: "〜2.9倍", f: d => d.odds !== null && d.odds < 3 },
+                  { label: "3〜5.9倍", f: d => d.odds !== null && d.odds >= 3 && d.odds < 6 },
+                  { label: "6〜9.9倍", f: d => d.odds !== null && d.odds >= 6 && d.odds < 10 },
+                  { label: "10〜19倍", f: d => d.odds !== null && d.odds >= 10 && d.odds < 20 },
+                  { label: "20倍以上", f: d => d.odds !== null && d.odds >= 20 },
+                ];
+                const row = (band) => ({
+                  n: band.length,
+                  w: pct(band.filter(d => d.fo === 1).length, band.length),
+                  r: pct(band.filter(d => d.fo <= 2).length, band.length),
+                  f: pct(band.filter(d => d.fo <= 3).length, band.length),
+                });
+                const overall = row(axisHorseEntries);
+                return (
+                  <>
+                    <div style={{ background: "#0f1420", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
+                        <StatMini label="サンプル" value={total + "件"} small />
+                        <StatMini label="勝率" value={overall.w} color="#e8c86a" small />
+                        <StatMini label="連対率" value={overall.r} color="#e8c86a" small />
+                        <StatMini label="複勝率" value={overall.f} color="#e8c86a" small />
+                      </div>
+                    </div>
+                    {axisHorseEntries.some(d => d.popularity !== null) && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 6 }}>人気帯別</div>
+                        {popBands.map(({ label, f }) => {
+                          const band = axisHorseEntries.filter(d => d.popularity !== null && f(d));
+                          if (band.length === 0) return null;
+                          const r = row(band);
+                          return (
+                            <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid #1e2a40" }}>
+                              <span style={{ fontSize: 11, color: "#aab", minWidth: 55 }}>{label}</span>
+                              <span style={{ fontSize: 10, color: "#6b7a99", minWidth: 28 }}>{band.length}件</span>
+                              <span style={{ fontSize: 11, color: "#e8c86a" }}>勝{r.w}</span>
+                              <span style={{ fontSize: 11, color: "#e8c86a" }}>連{r.r}</span>
+                              <span style={{ fontSize: 11, color: "#e8c86a" }}>複{r.f}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {axisHorseEntries.some(d => d.odds !== null) && (
+                      <div>
+                        <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 6 }}>オッズ帯別</div>
+                        {oddsBands.map(({ label, f }) => {
+                          const band = axisHorseEntries.filter(f);
+                          if (band.length === 0) return null;
+                          const r = row(band);
+                          return (
+                            <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid #1e2a40" }}>
+                              <span style={{ fontSize: 11, color: "#aab", minWidth: 55 }}>{label}</span>
+                              <span style={{ fontSize: 10, color: "#6b7a99", minWidth: 28 }}>{band.length}件</span>
+                              <span style={{ fontSize: 11, color: "#e8c86a" }}>勝{r.w}</span>
+                              <span style={{ fontSize: 11, color: "#e8c86a" }}>連{r.r}</span>
+                              <span style={{ fontSize: 11, color: "#e8c86a" }}>複{r.f}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, color: "#b8d0ff", fontWeight: 700, marginBottom: 10 }}>買い目の馬の成績</div>
+              {betHorseRows.length === 0 ? (
+                <div style={{ color: "#445", fontSize: 12 }}>レース結果（馬番）が入力された記録がありません</div>
+              ) : (() => {
+                const total = betHorseRows.length;
+                const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(1) + "%" : "-";
+                return (
+                  <div style={{ background: "#0f1420", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
+                      <StatMini label="延べ頭数" value={total + "頭"} small />
+                      <StatMini label="勝率" value={pct(betHorseRows.filter(d => d.isFirst).length, total)} color="#e8c86a" small />
+                      <StatMini label="連対率" value={pct(betHorseRows.filter(d => d.isTop2).length, total)} color="#e8c86a" small />
+                      <StatMini label="複勝率" value={pct(betHorseRows.filter(d => d.isTop3).length, total)} color="#e8c86a" small />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
