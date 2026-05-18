@@ -97,10 +97,12 @@ const newEntry = (mode = "manual") => ({
   id: Math.random().toString(36).slice(2, 9),
   mode, text: "", horses: [], axisHorses: [], poolHorses: [], axisPos: "1st", columns: [[], [], []],
   unitAmount: 100, amountMap: {}, tags: [],
-  hitCombos: [], // 的中した組み合わせ ["3-7-12", ...]
-  oddsMap: {},   // 組み合わせ別オッズ { "3-7-12": 23.4 } 倍率で保存
-  axisHorseInfo: { popularity: "", odds: "", finishOrder: "" },
+  hitCombos: [],
+  oddsMap: {},
 });
+
+const newAxisHorse = () => ({ horseNo: "", popularity: "", odds: "", finishOrder: "" });
+const newHimoHorse = () => ({ horseNo: "" });
 
 const initialForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -108,10 +110,10 @@ const initialForm = {
   betType: "三連単", entries: [newEntry("manual")],
   oddsMode: "per100", memo: "",
   result: { finishOrder: [], memo: "" },
-  raceResult: { first: "", second: "", third: "" },
+  axisHorsesInfo: [newAxisHorse()],
+  himoHorsesInfo: [],
   review: {
     purchaseReason: "", confidence: "",
-    axisPopularity: "", axisOdds: "",
     expectationMemo: "", missReason: "", reflectionMemo: "",
   },
 };
@@ -122,6 +124,8 @@ const keepRaceInfo = (prev) => ({
   raceNo: prev.raceNo, grade: prev.grade, raceName: prev.raceName,
   oddsMode: prev.oddsMode, betType: prev.betType, memo: prev.memo,
   result: { finishOrder: [], memo: "" },
+  axisHorsesInfo: [newAxisHorse()],
+  himoHorsesInfo: [],
   review: { ...initialForm.review, purchaseReason: prev.review?.purchaseReason || "", confidence: prev.review?.confidence || "" },
 });
 
@@ -1181,50 +1185,168 @@ function ManualHitChecker({ entry, onChange, analysisPerCombo, resultDriven }) {
   return <CombinationsList entry={entry} combinations={lines} onChange={onChange} analysisPerCombo={analysisPerCombo} resultDriven={resultDriven} />;
 }
 
-// ── 軸馬詳細情報 ─────────────
-function AxisHorseInfoSection({ axisHorseInfo, onChange }) {
-  const info = axisHorseInfo || { popularity: "", odds: "", finishOrder: "" };
-  const set = (key, value) => onChange({ ...info, [key]: value });
-  const hasAny = info.popularity || info.odds || info.finishOrder;
+// ── 複数軸馬情報 ─────────────
+function MultiAxisHorsesSection({ axisHorsesInfo, onChange }) {
+  const horses = axisHorsesInfo && axisHorsesInfo.length > 0 ? axisHorsesInfo : [newAxisHorse()];
+  const update = (i, key, value) => {
+    const next = horses.map((h, idx) => idx === i ? { ...h, [key]: value } : h);
+    onChange(next);
+  };
+  const addHorse = () => onChange([...horses, newAxisHorse()]);
+  const removeHorse = (i) => { if (horses.length <= 1) return; onChange(horses.filter((_, idx) => idx !== i)); };
+  const hasAny = horses.some(h => h.horseNo || h.popularity || h.odds || h.finishOrder);
+
   return (
-    <details style={{ marginTop: 10 }}>
-      <summary style={{ color: hasAny ? "#e8c86a" : "#6b7a99", fontSize: 12, fontWeight: 800, cursor: "pointer", userSelect: "none", outline: "none" }}>
-        ▶ 軸馬の詳細情報を記録（任意）{hasAny ? " ●" : ""}
-      </summary>
-      <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>最終人気</div>
-          <select value={info.popularity} onChange={e => set("popularity", e.target.value)}
-            style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }}>
-            <option value="">-</option>
-            {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}人気</option>)}
-          </select>
+          <div style={{ fontSize: 13, color: "#e8c86a", fontWeight: 800 }}>軸馬情報</div>
+          <div style={{ fontSize: 10, color: "#6b7a99", marginTop: 2 }}>馬番・人気・オッズ・着順（任意）</div>
         </div>
-        <div>
-          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>単勝オッズ</div>
-          <input type="number" min="1" step="0.1" inputMode="decimal" value={info.odds}
-            onChange={e => set("odds", e.target.value)} placeholder="例：5.8"
-            style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }} />
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>着順</div>
-          <select value={info.finishOrder} onChange={e => set("finishOrder", e.target.value)}
-            style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }}>
-            <option value="">-</option>
-            {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}着</option>)}
-            <option value="着外">着外</option>
-          </select>
-        </div>
+        <button onClick={addHorse}
+          style={{ padding: "5px 12px", borderRadius: 8, border: "1.5px solid #3a4f7a", background: "#1e2a40", color: "#b8d0ff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          ＋ 追加
+        </button>
       </div>
-    </details>
+      {horses.map((horse, i) => (
+        <div key={i} style={{ background: "#0f1420", borderRadius: 10, padding: "10px 12px", marginBottom: 8, border: "1px solid #2a3550", position: "relative" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, color: "#aab", fontWeight: 700 }}>軸馬 {horses.length > 1 ? `${i + 1}頭目` : ""}</span>
+            {horses.length > 1 && (
+              <button onClick={() => removeHorse(i)} style={{ background: "none", border: "none", color: "#e05555", fontSize: 13, cursor: "pointer", padding: "0 2px" }}>✕</button>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
+            <div>
+              <div style={{ fontSize: 9, color: "#6b7a99", fontWeight: 800, marginBottom: 4 }}>馬番</div>
+              <select value={horse.horseNo} onChange={e => update(i, "horseNo", e.target.value)}
+                style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontSize: 12, padding: "6px 4px" }}>
+                <option value="">-</option>
+                {Array.from({ length: 18 }, (_, j) => j + 1).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "#6b7a99", fontWeight: 800, marginBottom: 4 }}>最終人気</div>
+              <select value={horse.popularity} onChange={e => update(i, "popularity", e.target.value)}
+                style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontSize: 12, padding: "6px 4px" }}>
+                <option value="">-</option>
+                {Array.from({ length: 18 }, (_, j) => j + 1).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "#6b7a99", fontWeight: 800, marginBottom: 4 }}>単勝オッズ</div>
+              <input type="number" min="1" step="0.1" inputMode="decimal" value={horse.odds}
+                onChange={e => update(i, "odds", e.target.value)} placeholder="5.8"
+                style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontSize: 12, padding: "6px 4px" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "#6b7a99", fontWeight: 800, marginBottom: 4 }}>着順</div>
+              <select value={horse.finishOrder} onChange={e => update(i, "finishOrder", e.target.value)}
+                style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontSize: 12, padding: "6px 4px" }}>
+                <option value="">-</option>
+                {Array.from({ length: 18 }, (_, j) => j + 1).map(n => <option key={n} value={n}>{n}着</option>)}
+                <option value="着外">着外</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
-// ── レース結果記録（馬番）─────────────
-function RaceResultSection({ raceResult, onChange, entries, betType }) {
-  const result = raceResult || { first: "", second: "", third: "" };
-  const set = (key, value) => onChange({ ...result, [key]: value });
-  const hasAny = result.first || result.second || result.third;
+// ── ヒモ馬情報 ─────────────
+function HimoHorsesSection({ himoHorsesInfo, onChange, axisHorsesInfo, betEntries, betType }) {
+  const horses = himoHorsesInfo || [];
+  const axisNums = new Set((axisHorsesInfo || []).map(h => Number(h.horseNo)).filter(Boolean));
+
+  const allBetHorses = useMemo(() => {
+    const nums = new Set();
+    (betEntries || []).forEach(e => {
+      computeEntry(e, betType).combinations.forEach(c => {
+        parseCombo(c, betType).forEach(n => nums.add(n));
+      });
+    });
+    return [...nums].sort((a, b) => a - b).filter(n => !axisNums.has(n));
+  }, [betEntries, betType, axisNums]);
+
+  const selectedNums = new Set(horses.map(h => Number(h.horseNo)).filter(Boolean));
+
+  const toggleHorse = (n) => {
+    if (selectedNums.has(n)) {
+      onChange(horses.filter(h => Number(h.horseNo) !== n));
+    } else {
+      onChange([...horses, { horseNo: String(n) }]);
+    }
+  };
+
+  const addManual = () => onChange([...horses, newHimoHorse()]);
+  const removeHorse = (i) => onChange(horses.filter((_, idx) => idx !== i));
+  const updateHorseNo = (i, v) => onChange(horses.map((h, idx) => idx === i ? { ...h, horseNo: v } : h));
+
+  return (
+    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 13, color: "#88c0ff", fontWeight: 800 }}>ヒモ馬</div>
+          <div style={{ fontSize: 10, color: "#6b7a99", marginTop: 2 }}>軸以外の買い目馬（任意）</div>
+        </div>
+      </div>
+      {allBetHorses.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: "#6b7a99", marginBottom: 6 }}>買い目から自動抽出（タップで選択）</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {allBetHorses.map(n => {
+              const on = selectedNums.has(n);
+              return (
+                <button key={n} onClick={() => toggleHorse(n)}
+                  style={{ width: 36, height: 34, borderRadius: 6, border: "1.5px solid", fontSize: 13, fontWeight: 700, fontFamily: "monospace",
+                    cursor: "pointer",
+                    background: on ? "#1d3146" : "#1e2a40", color: on ? "#88c0ff" : "#6b7a99",
+                    borderColor: on ? "#5b7fbf" : "#2a3550",
+                  }}>{n}</button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {horses.filter(h => !allBetHorses.includes(Number(h.horseNo))).length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {horses.map((h, i) => {
+            if (allBetHorses.includes(Number(h.horseNo))) return null;
+            return (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                <select value={h.horseNo} onChange={e => updateHorseNo(i, e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 0, flex: 1, fontSize: 12 }}>
+                  <option value="">馬番選択</option>
+                  {Array.from({ length: 18 }, (_, j) => j + 1).filter(n => !axisNums.has(n)).map(n => <option key={n} value={n}>{n}番</option>)}
+                </select>
+                <button onClick={() => removeHorse(i)} style={{ background: "none", border: "none", color: "#e05555", fontSize: 14, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button onClick={addManual}
+        style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1.5px dashed #3a4f7a", background: "rgba(58,79,122,0.08)", color: "#8899bb", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+        ＋ 手動で馬番を追加
+      </button>
+      {horses.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: 10, color: "#6b7a99" }}>
+          選択中：{[...selectedNums].sort((a, b) => a - b).map(n => `${n}番`).join("、")}（{horses.length}頭）
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 統合レース結果セクション（ResultInput + RaceResultSection 統合）─────────────
+function UnifiedResultSection({ result, entries, betType, onChange }) {
+  const cfg = BET_TYPE_CONFIG[betType];
+  const finishOrder = result.finishOrder || [];
+  const winningCombos = computeWinningCombos(finishOrder, betType);
+  const analysis = analyzeRecordEntries(entries, betType, finishOrder);
+  const hasAny = finishOrder.some(n => n > 0);
 
   const allBetHorses = useMemo(() => {
     const nums = new Set();
@@ -1236,58 +1358,83 @@ function RaceResultSection({ raceResult, onChange, entries, betType }) {
     return [...nums].sort((a, b) => a - b);
   }, [entries, betType]);
 
-  const first = Number(result.first) || null;
-  const second = Number(result.second) || null;
-  const third = Number(result.third) || null;
+  const setPlace = (idx, value) => {
+    const next = [...finishOrder];
+    const n = Number(value);
+    if (n > 0) next[idx] = n; else next.splice(idx, 1, "");
+    onChange({ ...result, finishOrder: next });
+  };
+
+  const clear = () => onChange({ finishOrder: [], memo: "" });
+  const first = Number(finishOrder[0]) || null;
+  const second = Number(finishOrder[1]) || null;
+  const third = Number(finishOrder[2]) || null;
 
   return (
-    <details style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
-      <summary style={{ color: hasAny ? "#e8c86a" : "#6b7a99", fontSize: 13, fontWeight: 800, cursor: "pointer", userSelect: "none", outline: "none" }}>
-        ▶ レース結果を記録（任意）{hasAny ? " ●" : ""}
-      </summary>
-      <div style={{ marginTop: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
-          {[["first", "1着"], ["second", "2着"], ["third", "3着"]].map(([key, label]) => (
-            <div key={key}>
-              <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>{label}馬番</div>
-              <select value={result[key]} onChange={e => set(key, e.target.value)}
-                style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }}>
-                <option value="">-</option>
-                {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-          ))}
+    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, color: "#e4e6eb", fontWeight: 800 }}>レース結果</div>
+          <div style={{ fontSize: 10, color: "#6b7a99", marginTop: 2 }}>入力すると的中チェックが自動更新されます</div>
         </div>
-        {hasAny && allBetHorses.length > 0 && (
-          <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 8 }}>買い目に含む馬の着順</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {allBetHorses.map(h => {
-                const pos = h === first ? "1着" : h === second ? "2着" : h === third ? "3着" : null;
-                return (
-                  <span key={h} style={{
-                    padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 800, fontFamily: "monospace",
-                    background: pos ? "#1a4a1a" : "#1e2a40",
-                    color: pos ? "#6cbc5e" : "#445",
-                    border: `1px solid ${pos ? "#6cbc5e" : "#2a3550"}`,
-                  }}>
-                    {h}{pos ? `(${pos})` : ""}
-                  </span>
-                );
-              })}
-            </div>
-            {(() => {
-              const placed = allBetHorses.filter(h => h === first || h === second || h === third);
-              return placed.length > 0 && (
-                <div style={{ marginTop: 8, fontSize: 11, color: "#6cbc5e" }}>
-                  買い目馬 {allBetHorses.length}頭中 {placed.length}頭が1〜3着圏
-                </div>
-              );
-            })()}
-          </div>
-        )}
+        {analysis && <AnalysisBadge label={analysis.label} />}
       </div>
-    </details>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+        {[["1着", 0], ["2着", 1], ["3着", 2]].map(([label, idx]) => (
+          <div key={label}>
+            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>{label}馬番</div>
+            <select value={finishOrder[idx] || ""} onChange={e => setPlace(idx, e.target.value)}
+              style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontWeight: 800 }}>
+              <option value="">-</option>
+              {Array.from({ length: cfg.max }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        ))}
+      </div>
+
+      {winningCombos.length > 0 && (
+        <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: "#6b7a99", marginBottom: 4, fontWeight: 700 }}>的中組み合わせ</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ color: "#e8c86a", fontFamily: "monospace", fontSize: 16, fontWeight: 900, letterSpacing: 1, wordBreak: "break-word" }}>{winningCombos.join(" / ")}</div>
+          </div>
+          {analysis?.reason && <div style={{ color: "#8899bb", fontSize: 11, marginTop: 5 }}>{analysis.reason}</div>}
+        </div>
+      )}
+
+      {hasAny && allBetHorses.length > 0 && (
+        <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 8 }}>買い目馬の着順</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {allBetHorses.map(h => {
+              const pos = h === first ? "1着" : h === second ? "2着" : h === third ? "3着" : null;
+              return (
+                <span key={h} style={{
+                  padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 800, fontFamily: "monospace",
+                  background: pos ? "#1a4a1a" : "#1e2a40",
+                  color: pos ? "#6cbc5e" : "#445",
+                  border: `1px solid ${pos ? "#6cbc5e" : "#2a3550"}`,
+                }}>
+                  {h}{pos ? `(${pos})` : ""}
+                </span>
+              );
+            })}
+          </div>
+          {(() => {
+            const placed = allBetHorses.filter(h => h === first || h === second || h === third);
+            return placed.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 11, color: "#6cbc5e" }}>
+                買い目馬 {allBetHorses.length}頭中 {placed.length}頭が1〜3着圏
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      <textarea value={result.memo || ""} onChange={e => onChange({ ...result, memo: e.target.value })} placeholder="結果メモ（例：軸は来たが相手抜け）"
+        style={{ ...inputStyle, minHeight: 60, resize: "vertical", marginBottom: 10 }} />
+      <button onClick={clear} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #5a2a2a", background: "#2a1616", color: "#e05555", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>結果をクリア</button>
+    </div>
   );
 }
 
@@ -1351,8 +1498,6 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
         <TagInputWithSuggest tags={entry.tags || []} onChange={v => onChange({ ...entry, tags: v })} allHistoryTags={allHistoryTags} placeholder="騎手名・馬名を入力..." />
       </div>
 
-      <AxisHorseInfoSection axisHorseInfo={entry.axisHorseInfo} onChange={info => onChange({ ...entry, axisHorseInfo: info })} />
-
       {/* サマリー */}
       <div style={{ marginTop: 12, padding: "10px 12px", background: result.combinations.length > 0 ? "#1a2a1a" : "#2a1a1a", borderRadius: 8, border: `1px solid ${result.combinations.length > 0 ? "#2a3a2a" : "#3a2a2a"}` }}>
         {result.combinations.length > 0 ? (
@@ -1379,55 +1524,6 @@ function CombinationEntry({ entry, index, onChange, onDelete, betType, isOnly, a
   );
 }
 
-function ResultInput({ result, betType, onChange, entries }) {
-  const cfg = BET_TYPE_CONFIG[betType];
-  const slots = betType === "ワイド" ? 3 : Math.min(cfg.slots === 1 ? (betType === "複勝" ? 3 : 1) : cfg.slots, 3);
-  const finishOrder = result.finishOrder || [];
-  const winningCombos = computeWinningCombos(finishOrder, betType);
-  const analysis = analyzeRecordEntries(entries, betType, finishOrder);
-  const setPlace = (idx, value) => {
-    const next = [...finishOrder];
-    const n = Number(value);
-    if (n > 0) next[idx] = n; else next[idx] = "";
-    onChange({ ...result, finishOrder: next });
-  };
-  const clear = () => onChange({ finishOrder: [], memo: "" });
-  const labels = ["1着", "2着", "3着"].slice(0, slots);
-
-  return (
-    <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <Label>レース結果</Label>
-        {analysis && <AnalysisBadge label={analysis.label} />}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${labels.length},1fr)`, gap: 8, marginBottom: 10 }}>
-        {labels.map((label, idx) => (
-          <div key={label}>
-            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>{label}</div>
-            <input type="number" min="1" max={cfg.max} inputMode="numeric" value={finishOrder[idx] || ""} onChange={e => setPlace(idx, e.target.value)}
-              placeholder="馬番" style={{ ...inputStyle, marginBottom: 0, textAlign: "center", fontWeight: 800 }} />
-          </div>
-        ))}
-      </div>
-      <textarea value={result.memo || ""} onChange={e => onChange({ ...result, memo: e.target.value })} placeholder="結果メモ（例：軸は来たが相手抜け）"
-        style={{ ...inputStyle, minHeight: 68, resize: "vertical", marginBottom: 10 }} />
-      {winningCombos.length > 0 && (
-        <div style={{ background: "#0f1420", border: "1px solid #2a3550", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-          <div style={{ fontSize: 10, color: "#6b7a99", marginBottom: 4, fontWeight: 700 }}>実際の的中組み合わせ</div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ color: "#e8c86a", fontFamily: "monospace", fontSize: 16, fontWeight: 900, letterSpacing: 1, wordBreak: "break-word" }}>{winningCombos.join(" / ")}</div>
-            {analysis && <AnalysisBadge label={analysis.label} />}
-          </div>
-          {analysis?.reason && <div style={{ color: "#8899bb", fontSize: 11, marginTop: 5 }}>{analysis.reason}</div>}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={clear} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid #5a2a2a", background: "#2a1616", color: "#e05555", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>結果をクリア</button>
-        <div style={{ flex: 2, color: "#6b7a99", fontSize: 11, lineHeight: 1.5 }}>入力すると買い目の的中チェックと判定ラベルが自動更新されます</div>
-      </div>
-    </div>
-  );
-}
 
 function ResultOddsInput({ entries, betType, oddsMode, onChangeEntry }) {
   const rows = entries.flatMap((entry, entryIndex) => {
@@ -1499,21 +1595,9 @@ function PurchaseMemoSection({ review, onChange }) {
         <OptionChips options={CONFIDENCE_OPTIONS} value={review.confidence || ""} onChange={v => set("confidence", v)} />
       </div>
       <details>
-        <summary style={{ color: "#8899bb", fontSize: 12, fontWeight: 800, cursor: "pointer", marginBottom: 10 }}>詳細を入力</summary>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "10px 0 12px" }}>
-          <div>
-            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>軸馬人気</div>
-            <input type="number" min="1" inputMode="numeric" value={review.axisPopularity || ""} onChange={e => set("axisPopularity", e.target.value)}
-              placeholder="例：3" style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 800, marginBottom: 5 }}>軸馬オッズ</div>
-            <input type="number" min="0" step="0.1" inputMode="decimal" value={review.axisOdds || ""} onChange={e => set("axisOdds", e.target.value)}
-              placeholder="例：5.8" style={{ ...inputStyle, marginBottom: 0, textAlign: "center" }} />
-          </div>
-        </div>
+        <summary style={{ color: "#8899bb", fontSize: 12, fontWeight: 800, cursor: "pointer", marginBottom: 10 }}>購入前メモを入力</summary>
         <textarea value={review.expectationMemo || ""} onChange={e => set("expectationMemo", e.target.value)}
-          placeholder="購入前の期待値メモ" style={{ ...inputStyle, minHeight: 64, resize: "vertical", marginBottom: 0 }} />
+          placeholder="購入前の期待値メモ（予想理由・根拠など）" style={{ ...inputStyle, minHeight: 64, resize: "vertical", marginBottom: 0, marginTop: 10 }} />
       </details>
     </div>
   );
@@ -1850,6 +1934,46 @@ export default function App() {
           ...(clearHits ? { hitCombos: [], oddsMap: {} } : {}),
         }))
       : [newEntry("manual")];
+
+    // 軸馬情報: 新形式 > 旧形式（per-entry axisHorseInfo）> レビュー > デフォルト
+    let axisHorsesInfo;
+    if (r.axisHorsesInfo && r.axisHorsesInfo.length > 0) {
+      axisHorsesInfo = clearHits
+        ? r.axisHorsesInfo.map(h => ({ ...h, finishOrder: "" }))
+        : r.axisHorsesInfo;
+    } else {
+      const fromEntries = (r.formEntries || [])
+        .filter(e => e.axisHorseInfo)
+        .map(e => ({
+          horseNo: "",
+          popularity: e.axisHorseInfo.popularity || "",
+          odds: e.axisHorseInfo.odds || "",
+          finishOrder: clearHits ? "" : (e.axisHorseInfo.finishOrder || ""),
+        }));
+      if (fromEntries.length > 0) {
+        axisHorsesInfo = fromEntries;
+      } else if (r.review?.axisPopularity || r.review?.axisOdds) {
+        axisHorsesInfo = [{ horseNo: "", popularity: r.review.axisPopularity || "", odds: r.review.axisOdds || "", finishOrder: "" }];
+      } else {
+        axisHorsesInfo = [newAxisHorse()];
+      }
+    }
+
+    // result から finishOrder を取得（新形式優先、旧形式 raceResult からも）
+    let savedResult;
+    if (clearHits) {
+      savedResult = { finishOrder: [], memo: "" };
+    } else if (r.result?.finishOrder?.some(n => n > 0)) {
+      savedResult = r.result;
+    } else if (r.raceResult?.first) {
+      savedResult = {
+        finishOrder: [r.raceResult.first, r.raceResult.second, r.raceResult.third].filter(Boolean).map(Number),
+        memo: r.result?.memo || "",
+      };
+    } else {
+      savedResult = r.result || { finishOrder: [], memo: "" };
+    }
+
     return {
       ...initialForm,
       date: r.date, venueType: r.venueType || "JRA", venue: r.venue || "",
@@ -1857,10 +1981,11 @@ export default function App() {
       betType: r.betType || "三連単",
       oddsMode: form.oddsMode,
       memo: r.memo || "",
-      result: clearHits ? { finishOrder: [], memo: "" } : (r.result || { finishOrder: [], memo: "" }),
-      raceResult: clearHits ? { first: "", second: "", third: "" } : (r.raceResult || { first: "", second: "", third: "" }),
+      result: savedResult,
+      axisHorsesInfo,
+      himoHorsesInfo: clearHits ? [] : (r.himoHorsesInfo || []),
       review: clearHits
-        ? { ...initialForm.review, purchaseReason: r.review?.purchaseReason || "", confidence: r.review?.confidence || "", axisPopularity: r.review?.axisPopularity || "", axisOdds: r.review?.axisOdds || "", expectationMemo: r.review?.expectationMemo || "" }
+        ? { ...initialForm.review, purchaseReason: r.review?.purchaseReason || "", confidence: r.review?.confidence || "", expectationMemo: r.review?.expectationMemo || "" }
         : { ...initialForm.review, ...(r.review || {}) },
       entries,
     };
@@ -1890,7 +2015,7 @@ export default function App() {
   const addEntry = () => setForm(f => ({ ...f, entries: autoMarkHits([...f.entries, newEntry("manual")], f.betType, f.result?.finishOrder || []) }));
   const deleteEntry = (id) => setForm(f => ({ ...f, entries: f.entries.filter(e => e.id !== id) }));
   const handleResultChange = (result) => setForm(f => {
-    const finishOrder = (result.finishOrder || []).map(n => Number(n) || "").filter((n, i, arr) => n || i < arr.length - 1);
+    const finishOrder = (result.finishOrder || []).map(n => Number(n) || "").filter(n => n > 0);
     const cleanResult = { ...result, finishOrder };
     return { ...f, result: cleanResult, entries: autoMarkHits(f.entries, f.betType, finishOrder, true) };
   });
@@ -1959,6 +2084,14 @@ export default function App() {
     const now = createTimestamp();
     const previous = editingId ? records.find(r => r.id === editingId) : null;
 
+    // result.finishOrder から raceResult を同期
+    const fo = form.result?.finishOrder || [];
+    const raceResult = {
+      first: fo[0] ? String(fo[0]) : "",
+      second: fo[1] ? String(fo[1]) : "",
+      third: fo[2] ? String(fo[2]) : "",
+    };
+
     const record = {
       id: editingId || now,
       date: form.date, venueType: form.venueType, venue: form.venue, raceNo: form.raceNo,
@@ -1966,7 +2099,7 @@ export default function App() {
       betType: form.betType, combination: combinationText,
       tags: allTags,
       memo: form.memo.trim(),
-      formEntries: form.entries, // 編集・コピー用にフォームデータを保存
+      formEntries: form.entries,
       entries: form.entries.map(e => {
         const stats = entryStats(e, form.betType);
         const analysis = analyzeEntry(e, form.betType, form.result?.finishOrder || []).best;
@@ -1975,7 +2108,9 @@ export default function App() {
       points: totalPoints, unitAmount: form.entries[0]?.unitAmount || 100,
       odds: repOdds, isHit: anyHit,
       result: form.result || { finishOrder: [], memo: "" },
-      raceResult: form.raceResult || { first: "", second: "", third: "" },
+      raceResult,
+      axisHorsesInfo: form.axisHorsesInfo || [newAxisHorse()],
+      himoHorsesInfo: form.himoHorsesInfo || [],
       review: form.review || initialForm.review,
       analysis: recordAnalysis,
       investment: totalInvestment, payout: totalPayout, pnl: totalPnl,
@@ -2042,20 +2177,49 @@ export default function App() {
   const yearlyGroups = groupBy(filtered, r => r.date.slice(0, 4));
   const monthlyData = groupBy(statsRecords, r => r.date.slice(0, 7)).slice(0, 12);
   const modeStats = summarizeByEntryMode(statsRecords);
-  const axisHorseEntries = statsRecords.flatMap(r =>
-    (r.formEntries || [])
+  // 軸馬エントリー: 新形式（axisHorsesInfo）+ 旧形式（formEntries[].axisHorseInfo）バックワード互換
+  const axisHorseEntries = statsRecords.flatMap(r => {
+    if (r.axisHorsesInfo && r.axisHorsesInfo.length > 0) {
+      return r.axisHorsesInfo
+        .filter(h => h.finishOrder !== "" && h.finishOrder != null)
+        .map(h => ({
+          popularity: h.popularity !== "" ? Number(h.popularity) : null,
+          odds: h.odds !== "" ? Number(h.odds) : null,
+          fo: h.finishOrder === "着外" ? 99 : Number(h.finishOrder),
+        }));
+    }
+    // 旧形式
+    return (r.formEntries || [])
       .filter(e => e.axisHorseInfo?.finishOrder !== "" && e.axisHorseInfo?.finishOrder != null)
       .map(e => ({
         popularity: e.axisHorseInfo.popularity !== "" ? Number(e.axisHorseInfo.popularity) : null,
         odds: e.axisHorseInfo.odds !== "" ? Number(e.axisHorseInfo.odds) : null,
         fo: e.axisHorseInfo.finishOrder === "着外" ? 99 : Number(e.axisHorseInfo.finishOrder),
-      }))
-  );
+      }));
+  });
+
+  // ヒモ馬エントリー: himoHorsesInfo + raceResult から着順を導出
+  const himoHorseEntries = statsRecords.flatMap(r => {
+    if (!r.himoHorsesInfo || r.himoHorsesInfo.length === 0) return [];
+    const fo = r.result?.finishOrder || [];
+    const first = Number(fo[0]) || Number(r.raceResult?.first) || null;
+    const second = Number(fo[1]) || Number(r.raceResult?.second) || null;
+    const third = Number(fo[2]) || Number(r.raceResult?.third) || null;
+    if (!first) return [];
+    return r.himoHorsesInfo
+      .filter(h => h.horseNo !== "")
+      .map(h => {
+        const hn = Number(h.horseNo);
+        const place = hn === first ? 1 : hn === second ? 2 : hn === third ? 3 : 99;
+        return { fo: place };
+      });
+  });
+
   const betHorseRows = statsRecords.flatMap(r => {
-    if (!r.raceResult) return [];
-    const first = Number(r.raceResult.first) || null;
-    const second = Number(r.raceResult.second) || null;
-    const third = Number(r.raceResult.third) || null;
+    const fo = r.result?.finishOrder || [];
+    const first = Number(fo[0]) || Number(r.raceResult?.first) || null;
+    const second = Number(fo[1]) || Number(r.raceResult?.second) || null;
+    const third = Number(fo[2]) || Number(r.raceResult?.third) || null;
     if (!first && !second && !third) return [];
     const allHorses = [...new Set(
       (r.formEntries || []).flatMap(e => computeEntry(e, r.betType).combinations.flatMap(c => parseCombo(c, r.betType)))
@@ -2145,16 +2309,10 @@ export default function App() {
 
           <PurchaseMemoSection review={form.review || initialForm.review} onChange={handleReviewChange} />
 
-          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
-            <Label>メモ</Label>
-            <textarea
-              value={form.memo}
-              onChange={e => setF("memo", e.target.value)}
-              placeholder="予想理由・反省・馬場読みなど"
-              rows={3}
-              style={{ ...inputStyle, minHeight: 82, resize: "vertical", lineHeight: 1.5, marginBottom: 0 }}
-            />
-          </div>
+          <MultiAxisHorsesSection
+            axisHorsesInfo={form.axisHorsesInfo || [newAxisHorse()]}
+            onChange={v => setF("axisHorsesInfo", v)}
+          />
 
           <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
             <Label>券種</Label>
@@ -2204,20 +2362,35 @@ export default function App() {
           </div>
 
           {totalPoints > 0 && (
+            <HimoHorsesSection
+              himoHorsesInfo={form.himoHorsesInfo || []}
+              onChange={v => setF("himoHorsesInfo", v)}
+              axisHorsesInfo={form.axisHorsesInfo || []}
+              betEntries={form.entries}
+              betType={form.betType}
+            />
+          )}
+
+          {totalPoints > 0 && (
             <>
-              <ResultInput result={form.result || { finishOrder: [], memo: "" }} betType={form.betType} entries={form.entries} onChange={handleResultChange} />
+              <UnifiedResultSection result={form.result || { finishOrder: [], memo: "" }} betType={form.betType} entries={form.entries} onChange={handleResultChange} />
               <ResultOddsInput entries={form.entries} betType={form.betType} oddsMode={form.oddsMode} onChangeEntry={updateEntry} />
-              <RaceResultSection
-                raceResult={form.raceResult}
-                onChange={rr => setF("raceResult", rr)}
-                entries={form.entries}
-                betType={form.betType}
-              />
               {computeWinningCombos(form.result?.finishOrder || [], form.betType).length > 0 && (
                 <ReviewMemoSection review={form.review || initialForm.review} isHit={anyHit} onChange={handleReviewChange} />
               )}
             </>
           )}
+
+          <div style={{ background: "#161c2e", borderRadius: 14, padding: 18, marginBottom: 14, border: "1px solid #2a3550" }}>
+            <Label>メモ</Label>
+            <textarea
+              value={form.memo}
+              onChange={e => setF("memo", e.target.value)}
+              placeholder="予想理由・反省・馬場読みなど"
+              rows={3}
+              style={{ ...inputStyle, minHeight: 68, resize: "vertical", lineHeight: 1.5, marginBottom: 0 }}
+            />
+          </div>
 
           {/* プレビュー */}
           {totalPoints > 0 && (
@@ -2536,9 +2709,9 @@ export default function App() {
             </div>
 
             <div>
-              <div style={{ fontSize: 12, color: "#b8d0ff", fontWeight: 700, marginBottom: 10 }}>買い目の馬の成績</div>
+              <div style={{ fontSize: 12, color: "#b8d0ff", fontWeight: 700, marginBottom: 10 }}>買い目の馬の成績（全体）</div>
               {betHorseRows.length === 0 ? (
-                <div style={{ color: "#445", fontSize: 12 }}>レース結果（馬番）が入力された記録がありません</div>
+                <div style={{ color: "#445", fontSize: 12 }}>レース結果が入力された記録がありません</div>
               ) : (() => {
                 const total = betHorseRows.length;
                 const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(1) + "%" : "-";
@@ -2554,6 +2727,63 @@ export default function App() {
                 );
               })()}
             </div>
+
+            {/* ヒモ馬の成績 */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontSize: 12, color: "#88c0ff", fontWeight: 700, marginBottom: 10 }}>ヒモ馬の成績</div>
+              {himoHorseEntries.length === 0 ? (
+                <div style={{ color: "#445", fontSize: 12 }}>ヒモ馬が入力された記録がありません</div>
+              ) : (() => {
+                const total = himoHorseEntries.length;
+                const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(1) + "%" : "-";
+                return (
+                  <div style={{ background: "#0f1420", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
+                      <StatMini label="延べ頭数" value={total + "頭"} small />
+                      <StatMini label="勝率" value={pct(himoHorseEntries.filter(d => d.fo === 1).length, total)} color="#88c0ff" small />
+                      <StatMini label="連対率" value={pct(himoHorseEntries.filter(d => d.fo <= 2).length, total)} color="#88c0ff" small />
+                      <StatMini label="複勝率" value={pct(himoHorseEntries.filter(d => d.fo <= 3).length, total)} color="#88c0ff" small />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 軸馬 vs ヒモ馬 比較 */}
+            {axisHorseEntries.length > 0 && himoHorseEntries.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 12, color: "#aab", fontWeight: 700, marginBottom: 10 }}>軸馬 vs ヒモ馬 比較</div>
+                <div style={{ background: "#0f1420", borderRadius: 10, padding: "10px 12px" }}>
+                  {(() => {
+                    const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(1) + "%" : "-";
+                    const aTotal = axisHorseEntries.length;
+                    const hTotal = himoHorseEntries.length;
+                    return (
+                      <div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 6 }}>
+                          <div style={{ fontSize: 9, color: "#6b7a99" }}></div>
+                          <div style={{ fontSize: 10, color: "#e8c86a", fontWeight: 800, textAlign: "center" }}>勝率</div>
+                          <div style={{ fontSize: 10, color: "#e8c86a", fontWeight: 800, textAlign: "center" }}>連対率</div>
+                          <div style={{ fontSize: 10, color: "#e8c86a", fontWeight: 800, textAlign: "center" }}>複勝率</div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 4, padding: "6px 0", borderBottom: "1px solid #1e2a40" }}>
+                          <div style={{ fontSize: 11, color: "#e8c86a", fontWeight: 700 }}>軸馬({aTotal})</div>
+                          <div style={{ fontSize: 11, color: "#e8c86a", textAlign: "center" }}>{pct(axisHorseEntries.filter(d => d.fo === 1).length, aTotal)}</div>
+                          <div style={{ fontSize: 11, color: "#e8c86a", textAlign: "center" }}>{pct(axisHorseEntries.filter(d => d.fo <= 2).length, aTotal)}</div>
+                          <div style={{ fontSize: 11, color: "#e8c86a", textAlign: "center" }}>{pct(axisHorseEntries.filter(d => d.fo <= 3).length, aTotal)}</div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, padding: "6px 0" }}>
+                          <div style={{ fontSize: 11, color: "#88c0ff", fontWeight: 700 }}>ヒモ馬({hTotal})</div>
+                          <div style={{ fontSize: 11, color: "#88c0ff", textAlign: "center" }}>{pct(himoHorseEntries.filter(d => d.fo === 1).length, hTotal)}</div>
+                          <div style={{ fontSize: 11, color: "#88c0ff", textAlign: "center" }}>{pct(himoHorseEntries.filter(d => d.fo <= 2).length, hTotal)}</div>
+                          <div style={{ fontSize: 11, color: "#88c0ff", textAlign: "center" }}>{pct(himoHorseEntries.filter(d => d.fo <= 3).length, hTotal)}</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2634,12 +2864,28 @@ function RecordCard({ record: r, onDelete, onEdit, onCopy }) {
         </div>
       )}
 
-      {(r.review?.expectationMemo || r.review?.reflectionMemo || r.review?.axisPopularity || r.review?.axisOdds) && (
+      {/* 軸馬情報 */}
+      {(() => {
+        const axis = r.axisHorsesInfo?.filter(h => h.horseNo || h.popularity || h.odds || h.finishOrder) || [];
+        if (axis.length === 0) return null;
+        return (
+          <div style={{ background: "#0f1420", borderRadius: 8, padding: "8px 10px", marginBottom: 8, border: "1px solid #1e2a40" }}>
+            <div style={{ fontSize: 10, color: "#6b7a99", fontWeight: 700, marginBottom: 6 }}>軸馬</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {axis.map((h, i) => (
+                <span key={i} style={{ fontSize: 11, color: "#e8c86a", background: "#1a2535", padding: "3px 8px", borderRadius: 6, border: "1px solid #3a4f7a" }}>
+                  {h.horseNo ? `${h.horseNo}番` : ""}{h.popularity ? ` ${h.popularity}人気` : ""}{h.odds ? ` ${h.odds}倍` : ""}{h.finishOrder ? ` →${h.finishOrder}` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {(r.review?.expectationMemo || r.review?.reflectionMemo) && (
         <details style={{ background: "#0f1420", borderRadius: 8, padding: "8px 10px", marginBottom: 8, border: "1px solid #1e2a40" }}>
           <summary style={{ fontSize: 10, color: "#6b7a99", fontWeight: 600, cursor: "pointer", outline: "none" }}>購入・反省メモ</summary>
           <div style={{ color: "#aab8cc", fontSize: 11, marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-            {r.review?.axisPopularity && `軸人気: ${r.review.axisPopularity}番人気\n`}
-            {r.review?.axisOdds && `軸オッズ: ${r.review.axisOdds}倍\n`}
             {r.review?.expectationMemo && `購入前: ${r.review.expectationMemo}\n`}
             {r.review?.reflectionMemo && `反省: ${r.review.reflectionMemo}`}
           </div>
