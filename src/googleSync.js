@@ -2,6 +2,7 @@
 
 const SPREADSHEET_NAME = "馬券収支ノート_データ";
 const SHEET_NAME = "records";
+const CHUNK_SIZE = 45000; // Sheets API セル上限 50,000文字の安全域
 
 // アクセストークンを保存
 export const saveToken = (token, expiresAt) => {
@@ -80,28 +81,37 @@ async function ensureSpreadsheetId(token) {
   return id;
 }
 
-// 全データをアップロード（上書き）
+// 全データをアップロード（チャンク分割で50,000文字制限を回避）
 export async function uploadRecords(records) {
   const token = getToken();
   if (!token) throw new Error("認証が切れています。再ログインしてください");
 
   const id = await ensureSpreadsheetId(token);
 
-  // recordsをJSON文字列にして1セルに保存（シンプルかつ完全復元可）
-  const json = JSON.stringify(records);
-  // セルサイズ制限のためバージョン情報も付ける
-  const meta = JSON.stringify({ version: 1, count: records.length, savedAt: new Date().toISOString() });
+  // formEntries は combination から復元可能なため除外してサイズを削減
+  const uploadData = records.map(({ formEntries, ...rest }) => rest);
+  const json = JSON.stringify(uploadData);
 
+  // 45,000文字単位でチャンク分割
+  const chunks = [];
+  for (let i = 0; i < json.length; i += CHUNK_SIZE) {
+    chunks.push(json.slice(i, i + CHUNK_SIZE));
+  }
+
+  const meta = JSON.stringify({ version: 2, count: records.length, chunks: chunks.length, savedAt: new Date().toISOString() });
   const values = [
     ["__meta__", meta],
-    ["__data__", json],
+    ...chunks.map((chunk, i) => [`__chunk_${i}__`, chunk]),
   ];
 
-  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${SHEET_NAME}!A1?valueInputOption=RAW`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ values }),
-  });
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${SHEET_NAME}!A1:B${values.length}?valueInputOption=RAW`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values }),
+    }
+  );
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Upload failed: ${res.status} ${errText}`);
@@ -109,24 +119,60 @@ export async function uploadRecords(records) {
   return { count: records.length };
 }
 
-// 全データをダウンロード
+// 全データをダウンロード（新旧フォーマット両対応）
 export async function downloadRecords() {
   const token = getToken();
   if (!token) throw new Error("認証が切れています。再ログインしてください");
 
   const id = await ensureSpreadsheetId(token);
 
-  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${SHEET_NAME}!A1:B2`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-  const data = await res.json();
+  // まずメタ情報を取得してチャンク数を把握
+  const metaRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${SHEET_NAME}!A1:B1`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!metaRes.ok) throw new Error(`Download failed: ${metaRes.status}`);
+  const metaData = await metaRes.json();
+  const metaRow = (metaData.values || []).find(r => r[0] === "__meta__");
+
+  let numChunks = 1;
+  if (metaRow && metaRow[1]) {
+    try {
+      const meta = JSON.parse(metaRow[1]);
+      if (meta.chunks) numChunks = meta.chunks;
+    } catch {}
+  }
+
+  // チャンク数分の行を取得（__meta__ + N個の __chunk_*__）
+  const dataRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${SHEET_NAME}!A1:B${1 + numChunks}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!dataRes.ok) throw new Error(`Download failed: ${dataRes.status}`);
+  const data = await dataRes.json();
   const rows = data.values || [];
 
-  // データ行を探す
+  // 新フォーマット: __chunk_N__ 行を結合して復元
+  const chunkRows = rows
+    .filter(r => r[0]?.startsWith("__chunk_"))
+    .sort((a, b) => {
+      const ai = parseInt(a[0].match(/\d+/)?.[0] || "0");
+      const bi = parseInt(b[0].match(/\d+/)?.[0] || "0");
+      return ai - bi;
+    });
+
+  if (chunkRows.length > 0) {
+    const json = chunkRows.map(r => r[1] || "").join("");
+    try {
+      return JSON.parse(json);
+    } catch {
+      throw new Error("データの解析に失敗しました");
+    }
+  }
+
+  // 旧フォーマット fallback: __data__ セル
   const dataRow = rows.find(r => r[0] === "__data__");
   if (!dataRow || !dataRow[1]) return [];
-
   try {
     return JSON.parse(dataRow[1]);
   } catch {
